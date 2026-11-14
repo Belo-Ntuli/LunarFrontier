@@ -1,0 +1,259 @@
+# Lunar Frontier — Game Specification
+
+**Status:** Initial playable MVP
+**Audience:** Product, design, engineering, art, and education
+**Implementation status:** The browser MVP implements the 3D lunar atlas, starting colony, 2D sector management, resource simulation, facility construction, exploration, pausing, and local saves. Product and economy values are initial balancing defaults.
+
+## 1. Game concept
+
+Lunar Frontier is a student-facing lunar civilization builder. Players establish an outpost on the Moon, manage its people and life-support resources, and gradually explore and develop additional lunar sectors. The game makes mission trade-offs tangible: choices about life support, energy, materials, and exploration affect how long the crew can survive and what the colony can accomplish.
+
+The experience combines:
+
+- A **3D overview** of a spherical Moon divided into 15 selectable, naturally contoured terrain regions.
+- A **2D management view** for playing and developing the selected sector.
+
+## 2. Product goals
+
+1. Make lunar settlement systems and resource trade-offs understandable through play.
+2. Let a player choose where their colony begins and give them a clear path to explore more of the Moon.
+3. Keep the world legible: players can see sector status, resource levels, crew count, and survival day.
+4. Support a pause-and-resume play style suitable for learners.
+5. Save progress locally in the browser without requiring an account, server, or database.
+
+## 3. Core play loop
+
+1. Start a new colony and choose one of the 15 sectors as the landing site.
+2. Establish the initial habitat and crew in that sector.
+3. Review the current day, people, and resource stores.
+4. Manage the colony in the 2D sector view.
+5. Inspect other sectors in the 3D overview. Locked sectors show their exploration requirements.
+6. Gather the required materials and crew capacity, then unlock a sector for exploration and development.
+7. Continue balancing colony needs and expansion to extend the outpost's survival.
+
+The initial resource rates, building actions, exploration costs, and survival/failure rules are defined in Sections 5–9. They are playable balancing defaults, not lunar mission-design recommendations.
+
+## 4. World and sector overview
+
+### 4.1 Lunar map
+
+- Represent the Moon as a round 3D planet.
+- Divide the globe into 15 individually selectable sectors that cover the surface.
+- Render sector boundaries as softly blended, irregular terrain transitions in the Moon's surface texture, like natural landforms on a globe. Do not draw polygon tiles, vector outlines, or a visible grid on the Moon.
+- Keep terrain-region colors subtle; use a clear surface tint to distinguish an unlocked, hovered, or selected region.
+- Selecting a sector from the adjacent list must remain available as an alternative to interacting with the globe.
+- Dragging rotates the Moon. The sector list remains an accessible alternative to pointer-based globe selection.
+- Show which sector is selected, unlocked, or locked with visually distinct states.
+- A sector should remain identifiable in both the globe overview and the 2D gameplay view.
+
+### 4.2 Sector roster
+
+Preserve these names and their numbering in the game and project data:
+
+| # | Sector |
+|---:|---|
+| 1 | South Pole |
+| 2 | Southern polar field |
+| 3 | North Pole |
+| 4 | Northern ice fields |
+| 5 | Basalt Plains |
+| 6 | Wrinkle Ridges |
+| 7 | Volcanic Domes |
+| 8 | Sinuous Rilles |
+| 9 | Procellarum Terrane |
+| 10 | Northern poles |
+| 11 | Lunar Highlands |
+| 12 | Basin Blankets |
+| 13 | Impact Basin |
+| 14 | Massif concentric mountain |
+| 15 | Deep shadowed crater |
+
+Names are reproduced as supplied. Do not merge similarly named areas (for example, North Pole, Northern poles, and Northern ice fields) without an approved design change.
+
+### 4.3 Sector interaction
+
+- **Hover/focus:** Highlight the sector on the surface and display its details.
+- **Locked sector details:** Show that the sector is locked and state the required materials and people needed to explore it.
+- **Unlocked sector details:** Show its status and provide a way to enter it.
+- **Select/click:** Selecting the starting sector begins the colony there. Selecting an unlocked sector enters its 2D gameplay view.
+- **Accessibility:** Hover effects must have equivalent keyboard-focus and touch/select interactions; essential information cannot be hover-only.
+- **Motion:** Sector lift and camera transitions should be brief and should not be required to understand state. Respect reduced-motion preferences.
+
+## 5. New colony and starting state
+
+- A new player chooses one starting sector from the 15-sector roster.
+- The chosen sector becomes the colony's starting/active sector.
+- The remaining 14 sectors begin locked.
+- The colony begins with **7 people**.
+- Create a **basic habitat** in the starting sector.
+- Display the initial counter as **Day 1**.
+- Starting inventory:
+
+  | Resource | Starting amount |
+  |---|---:|
+  | Water | 70 |
+  | Food | 70 |
+  | Energy | 80 |
+  | Oxygen | 70 |
+  | Metal | 110 |
+  | Lunar regolith | 120 |
+
+- These are initial playable balancing values, not real mission-design recommendations.
+
+## 6. 2D sector gameplay
+
+- Entering an unlocked sector transitions from the 3D Moon overview to a 2D view of that sector.
+- The 2D view is the management/play space for the sector, not a separate save or separate colony.
+- The selected sector and colony-wide status (day, people, and resources) remain clear while managing the sector.
+- Arrange the 2D gameplay view as a map-first workspace: a compact colony resource rail spans the top, the broad surface map sits beside a construction bay, and the field guide and day controls remain secondary below it. The map is the main play area, not a small illustration beside a large timer or build list.
+- Keep sector resource amounts and colony-wide daily rates readable alongside the map. Show what each facility helps with, its production, recurring operating use, and one-time build cost.
+- Include a short terrain field guide that connects the selected lunar environment to exploration and survival choices. Keep this educational context visible without obscuring construction controls.
+- The starting sector contains the basic habitat.
+- Show the habitat and attached crew living modules as substantial, recognizable structures in the starting sector's 2D map. Constructed facilities also appear on the map in their own locations.
+- Newly unlocked sectors initially show an expedition site without a habitat; facilities can be constructed there after unlocking.
+- Players can develop or use additional sectors only after unlocking them.
+- The sector management view includes a prominent 2D surface map, operational status, facility construction controls, resource readouts, a terrain field guide, and a next-day timer. Gameplay panels use crisp opaque surfaces and do not blur the map or building information.
+- The surface map shows constructed facilities and interactive fieldwork locations. Players can perform one field operation each lunar day from their current sector.
+- A facility type can be built once per sector. Facilities do not require a separate habitat to be present in that sector.
+- Facility production and consumption are colony-wide, and materials are shared between unlocked sectors.
+- Provide a clear route back to the 3D overview without losing the current colony state.
+
+### 6.1 Facilities
+
+Construction costs are spent immediately. Production and operating consumption apply on each day transition. Facilities are unique per sector.
+
+| Facility | Metal | Lunar regolith | Daily output | Daily operating use |
+|---|---:|---:|---|---|
+| Basic habitat (starting sector only) | Included | Included | +1 Water, +2 Food, +14 Energy, +2 Oxygen | None |
+| Living quarters | 20 | 16 | None; provides visible sheltered space only | None |
+| Solar array | 12 | 10 | +12 Energy | None |
+| Hydroponics bay | 18 | 18 | +10 Food | 2 Water, 2 Energy |
+| Ice extractor | 20 | 12 | +10 Water | 3 Energy |
+| Oxygen recycler | 14 | 8 | +10 Oxygen | 2 Energy |
+| Regolith & metal mine | 16 | 14 | +4 Metal, +8 Lunar regolith | 5 Energy |
+
+### 6.2 Surface fieldwork
+
+Fieldwork is an immediate, crew-led action on the 2D sector map. The colony may complete one field operation per lunar day. Energy is spent when the operation begins; the resulting materials are added immediately. Ending a shift or waiting for the next day makes another operation available. Pausing disables fieldwork.
+
+| Operation | Availability | Energy cost | Immediate result |
+|---|---|---:|---|
+| Prospect mineral ridge | Any unlocked sector | 4 | +2 Metal, +5 Lunar regolith |
+| Drill an ice core | Sectors with modeled polar, icy, or permanently shadowed deposits | 5 | +8 Water |
+
+Ice-core operations are available in South Pole, Southern polar field, North Pole, Northern ice fields, Northern poles, and Deep shadowed crater. The operation represents a simplified survey/sample return, not a real mission yield estimate. If the crew lacks the energy for an operation, the map disables it and identifies the energy constraint. Pausing or ending the mission also disables fieldwork.
+
+## 7. People and resources
+
+### 7.1 People
+
+- Starting population: **7 people**.
+- Crew consumes 1 Water, 1 Food, and 1 Oxygen per person each day.
+- Crew consumes Energy at a rate of 1 unit per 2 people per day, rounded up.
+- People are part of a locked sector's displayed exploration requirement. This is a minimum team-size check; people are not spent when the player unlocks a sector.
+- A fieldwork operation uses the available crew but does not remove people from the colony or change daily crew consumption.
+
+### 7.2 Resource roster
+
+Use the following six resource names consistently in UI, saved data, and game logic:
+
+1. Water
+2. Food
+3. Energy
+4. Oxygen
+5. Metal
+6. Lunar regolith
+
+There is no inventory capacity limit in the current playable version. The starting habitat and facilities above are the complete initial resource economy; do not silently introduce additional core resources or costs.
+
+## 8. Sector unlocking and expansion
+
+- Only the selected starting sector is initially unlocked; the other 14 are locked.
+- Hovering, keyboard-focusing, or selecting a locked sector for inspection shows its exploration requirements.
+- Requirements include Metal, Lunar regolith, and a minimum number of people.
+- Do not allow a locked sector to enter 2D gameplay or be developed before it is unlocked.
+- Once the exploration requirements are met and the player confirms the action, spend the materials, mark the sector unlocked, and enter its 2D surface view. The crew requirement is not consumed.
+- Unlocking takes no additional in-game time in this version.
+- A sector's locked/unlocked state must persist across reloads.
+
+| Sector | Metal | Lunar regolith | Minimum crew |
+|---|---:|---:|---:|
+| South Pole | 24 | 18 | 3 |
+| Southern polar field | 28 | 22 | 4 |
+| North Pole | 25 | 20 | 3 |
+| Northern ice fields | 30 | 24 | 4 |
+| Basalt Plains | 26 | 20 | 3 |
+| Wrinkle Ridges | 28 | 22 | 4 |
+| Volcanic Domes | 30 | 24 | 4 |
+| Sinuous Rilles | 32 | 26 | 5 |
+| Procellarum Terrane | 30 | 24 | 4 |
+| Northern poles | 34 | 28 | 5 |
+| Lunar Highlands | 32 | 26 | 4 |
+| Basin Blankets | 34 | 28 | 5 |
+| Impact Basin | 36 | 30 | 5 |
+| Massif concentric mountain | 38 | 32 | 5 |
+| Deep shadowed crater | 40 | 34 | 6 |
+
+## 9. Time and pause
+
+- Show a day counter for colony survival duration.
+- Include a visible pause button in the gameplay interface.
+- One in-game day takes **45 seconds** while the page is visible and the simulation is unpaused. Players can also end the current shift early to advance one day immediately.
+- Pausing stops the in-game clock and all time-based simulation, including resource production/consumption and any timed exploration or construction.
+- While paused, players can still inspect the interface, review sector information, and save or load progress. Actions that advance or consume in-game time must not progress the simulation until unpaused.
+- The page does not accrue elapsed play time while hidden.
+- At each day transition, calculate facility output and operating use together with crew needs. If Water, Food, Oxygen, or Energy would fall below zero, the mission ends, pauses, and reports which need could not be met.
+
+## 10. Persistence and save behavior
+
+- Use browser local storage for colony progress; no database, account, or remote service is required.
+- Save at least: selected starting sector, current sector, unlocked sectors, population, resource quantities, day, pause-independent simulation state, and completed/active progression state needed to resume.
+- Persist after colony creation, building, unlocking, day transitions, pause changes, and periodically during the day timer.
+- Store the game state in the browser under the versioned `lunar-frontier-save` local-storage key.
+- Include a save schema version so future game updates can identify and migrate prior saves. The current schema is version 2 and migrates existing version-1 colonies, preserving their progress.
+- Handle unavailable storage, invalid JSON, and incompatible save versions explicitly. Do not silently overwrite a player's unreadable save with a new colony.
+- The game should provide a deliberate new-game/reset action with confirmation before replacing saved progress.
+
+## 11. Learning and UX requirements
+
+- Present resource needs and exploration gates in understandable language, with daily production/use and one-time costs shown in the interface.
+- Use gameplay feedback to help learners connect decisions with consequences (for example, explain which need a resource supports and why a requirement is unmet).
+- Avoid presenting uncertain or simplified lunar engineering claims as precise real-world facts. Label game abstractions and include age-appropriate explanations for STEM concepts.
+- Make sector status, selection, and key quantities perceivable without relying on color alone.
+- Keep critical status visible in both 3D and 2D views.
+
+## 12. Decisions needed
+
+The initial playable values above should be play-tested with students before they are treated as final balance. These product decisions remain open:
+
+- What is the target age range, platform, and intended session length?
+- What constitutes a successful survival milestone or end state besides a life-support failure?
+- Should players be able to increase the crew beyond the initial seven people?
+- Which STEM topics and learning outcomes must be explicitly taught or assessed?
+- Should saves sync or export between devices? (Current behavior is local browser storage only.)
+
+## 13. Acceptance criteria
+
+The initial implementation is ready for review when all of the following are true:
+
+1. The 3D overview presents a spherical Moon with 15 individually selectable, softly differentiated, naturally contoured terrain regions and no visible polygon grid or vector outlines.
+2. All 15 sectors appear with the exact roster names and can be individually inspected.
+3. Hovering a sector highlights its surface and reveals its details; touch users can access the same details by selection.
+4. A new colony lets the player choose any one of the 15 sectors as the starting location.
+5. Starting a colony creates a basic habitat in the selected sector, sets the population to 7, and leaves every other sector locked.
+6. A locked sector's inspection state clearly identifies it as locked and displays its material and people requirements.
+7. A locked sector cannot be entered or developed; after its requirements are satisfied and the player confirms, it becomes unlocked and enterable.
+8. Selecting an unlocked sector opens its 2D gameplay view, and returning to the globe preserves the same colony state.
+9. The UI displays the survival day, population, and all six named resources.
+10. The pause button stops the day clock and every time-based simulation process; unpausing resumes them.
+11. Reloading the game restores the saved colony from local storage, including selected/unlocked sectors, people, resources, and day.
+12. Invalid, outdated, or unavailable local storage is handled with a clear user-facing message and without silently destroying existing progress.
+13. Players can perform one field operation per day; mineral prospecting is available in every unlocked sector, while ice-core drilling is limited to sectors marked with ice deposits.
+14. Fieldwork immediately spends the displayed Energy cost, yields the displayed resources, cannot be repeated in the same day, and becomes available again on the next day.
+15. A version-1 local save migrates to the current schema without losing colony progress.
+16. The 2D sector screen presents the lunar surface map as its dominant play area, with a compact resource rail above it and construction controls beside it; the field guide and day timer are secondary.
+17. Sector gameplay panels use readable opaque surfaces; no backdrop blur obscures the map, resource values, or facility details.
+18. Facility cards explain their colony purpose, construction costs, daily output, and recurring resource use, and the field guide explains a relevant terrain and mission trade-off.
+19. The starting habitat and living quarters, along with each constructed facility, are visibly represented on the 2D sector surface. Building living quarters costs 20 Metal and 16 Lunar regolith and does not increase population.
+
+The economy, day length, and exploration costs are implemented as the initial values in this specification and should be adjusted only with corresponding UI, tests, and documentation updates.
