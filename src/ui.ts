@@ -566,7 +566,55 @@ function renderPixelatedSurfaceMap(): void {
     'oxygen-recycler': '#c5b3d5',
     'regolith-mine': '#d5a45f',
   };
-  const drawRingBuilding = (x: number, y: number, radius: number, light: string): void => {
+  const drawPixelBuilding = (x: number, y: number, radius: number, light: string): void => {
+    const px = Math.round(x);
+    const py = Math.round(y);
+    const cell = radius / 6;
+    const rowWidths = [3, 7, 9, 11, 13, 13, 13, 13, 13, 11, 9, 7, 3];
+
+    for (let row = 0; row < rowWidths.length; row += 1) {
+      const halfWidth = Math.floor(rowWidths[row] / 2);
+      for (let column = -halfWidth; column <= halfWidth; column += 1) {
+        context.fillStyle = '#192429';
+        context.fillRect(
+          px + column * cell + cell,
+          py + (row - 6) * cell + cell,
+          cell,
+          cell,
+        );
+      }
+    }
+
+    for (let row = 0; row < rowWidths.length; row += 1) {
+      const halfWidth = Math.floor(rowWidths[row] / 2);
+      for (let column = -halfWidth; column <= halfWidth; column += 1) {
+        const distance = column * column + (row - 6) * (row - 6);
+        context.fillStyle =
+          distance >= 32 ? '#1c292e'
+            : distance >= 18 ? '#e3dce8'
+              : distance >= 8 ? '#796d89'
+                : '#272a35';
+        context.fillRect(
+          px + column * cell,
+          py + (row - 6) * cell,
+          cell,
+          cell,
+        );
+      }
+    }
+
+    context.fillStyle = '#46535a';
+    context.fillRect(px - cell, py - cell, cell * 2, cell * 2);
+    context.fillStyle = light;
+    context.fillRect(px - cell, py - cell, cell, cell);
+    context.fillStyle = '#f2edf3';
+    context.fillRect(px + cell, py - cell, cell, cell);
+    context.fillStyle = light;
+    context.fillRect(px - 4 * cell, py, cell, cell);
+    context.fillRect(px + 3 * cell, py, cell, cell);
+  };
+
+  const drawSiteMarker = (x: number, y: number, radius: number, light: string): void => {
     const px = Math.round(x);
     const py = Math.round(y);
     context.fillStyle = '#1c292e';
@@ -577,19 +625,8 @@ function renderPixelatedSurfaceMap(): void {
     context.beginPath();
     context.arc(px, py, radius, 0, Math.PI * 2);
     context.fill();
-    context.fillStyle = '#796d89';
-    context.beginPath();
-    context.arc(px, py, Math.max(2, radius - 2), 0, Math.PI * 2);
-    context.fill();
-    context.fillStyle = '#272a35';
-    context.beginPath();
-    context.arc(px, py, Math.max(1, radius - 5), 0, Math.PI * 2);
-    context.fill();
-    context.fillStyle = '#f2edf3';
-    context.fillRect(px - 1, py - 1, 2, 2);
     context.fillStyle = light;
-    context.fillRect(px - radius + 3, py - 1, 2, 1);
-    context.fillRect(px + radius - 4, py, 2, 1);
+    context.fillRect(px - 1, py - 1, 2, 2);
   };
 
   const toCanvasPoint = (element: Element): { x: number; y: number } | null => {
@@ -600,19 +637,19 @@ function renderPixelatedSurfaceMap(): void {
   };
 
   if (svg.querySelector('.habitat-structure')) {
-    drawRingBuilding(125, 85, 13, colors.habitat);
-    drawRingBuilding(103, 85, 7, colors['living-quarters']);
-    drawRingBuilding(147, 85, 7, colors['living-quarters']);
+    drawPixelBuilding(125, 85, 13, colors.habitat);
+    drawPixelBuilding(103, 85, 7, colors['living-quarters']);
+    drawPixelBuilding(147, 85, 7, colors['living-quarters']);
   }
   svg.querySelectorAll<SVGGElement>('.facility-structure').forEach((building) => {
     const point = toCanvasPoint(building);
     if (!point) return;
     const buildingType = Object.keys(colors).find((type) => building.classList.contains(type));
-    drawRingBuilding(point.x, point.y, 9, colors[buildingType ?? 'regolith-mine']);
+    drawPixelBuilding(point.x, point.y, 9, colors[buildingType ?? 'regolith-mine']);
   });
   svg.querySelectorAll<SVGGElement>('.landing-site, .map-resource-site').forEach((site) => {
     const point = toCanvasPoint(site);
-    if (point) drawRingBuilding(point.x, point.y, site.classList.contains('landing-site') ? 6 : 5, '#f2c56f');
+    if (point) drawSiteMarker(point.x, point.y, site.classList.contains('landing-site') ? 6 : 5, '#f2c56f');
   });
 
   contextElement.insertBefore(canvas, svg.nextSibling);
