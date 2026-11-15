@@ -113,6 +113,7 @@ Names are reproduced as supplied. Do not merge similarly named areas (for exampl
 - Newly unlocked sectors initially show an expedition site without a habitat; facilities can be constructed there after unlocking.
 - Players can develop or use additional sectors only after unlocking them.
 - The sector management view includes a prominent 2D surface map, operational status, facility construction controls, resource readouts, a terrain field guide, and a next-day timer. Gameplay panels use crisp opaque surfaces and do not blur the map or building information.
+- Render the 2D sector environment in a simple, crisp pixelated style rather than smooth vector artwork. Zoom toward the colony, use cool blue-gray tiled regolith and scattered terrain detail, and depict compact buildings with stepped pixel silhouettes, layered ring-like roof bands, and blocky lit details. Keep the landing or expedition site and interactive fieldwork locations accessible.
 - The surface map shows constructed facilities and interactive fieldwork locations. Players can perform one field operation each lunar day from their current sector.
 - A facility type can be built once per sector. Facilities do not require a separate habitat to be present in that sector.
 - Facility production and consumption are colony-wide, and materials are shared between unlocked sectors.

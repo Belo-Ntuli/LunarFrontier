@@ -284,73 +284,71 @@ function sectorResourceMarkup(): string {
 function habitatMarkup(crew: number): string {
   return `<g class="colony-structure habitat-structure" transform="translate(500 342)" role="img" aria-label="Basic habitat with attached living quarters">
     <title>Basic habitat and crew living quarters</title>
-    <ellipse class="structure-shadow" cx="0" cy="27" rx="151" ry="38"/>
-    <path class="landing-pad" d="M-163 29 L-127 8 L119 8 L163 29 L127 50 L-127 50 Z"/>
-    <path class="habitat-dome" d="M-68 12 C-67 -38 -39 -73 0 -81 C39 -73 67 -38 68 12 Z"/>
-    <path class="habitat-window" d="M-22 -13 Q0 -42 22 -13 L22 2 L-22 2 Z"/>
-    <path class="habitat-door" d="M-8 12 L-8 -7 Q0 -17 8 -7 L8 12 Z"/>
-    <rect class="quarter-module" x="83" y="-25" width="56" height="37" rx="6"/>
-    <path class="quarter-roof" d="M79 -25 L111 -45 L143 -25 Z"/>
-    <rect class="quarter-window" x="93" y="-12" width="10" height="9" rx="2"/>
-    <rect class="quarter-window" x="119" y="-12" width="10" height="9" rx="2"/>
-    <path class="habitat-tunnel" d="M62 -2 L84 -2"/>
-    <rect class="quarter-module" x="-142" y="-13" width="48" height="31" rx="6"/>
-    <path class="quarter-roof" d="M-147 -13 L-118 -31 L-89 -13 Z"/>
-    <rect class="quarter-window" x="-131" y="-3" width="9" height="8" rx="2"/>
-    <rect class="quarter-window" x="-111" y="-3" width="9" height="8" rx="2"/>
-    <path class="habitat-tunnel" d="M-93 1 L-68 1"/>
-    <circle class="habitat-beacon" cx="0" cy="-84" r="4"/>
-    <text class="structure-label" x="0" y="71">HABITAT + LIVING QUARTERS · ${crew} CREW</text>
+    <ellipse class="structure-shadow" cx="0" cy="27" rx="139" ry="76"/>
+    <rect class="landing-pad" x="-133" y="-57" width="266" height="116" rx="4"/>
+    <path class="habitat-tunnel" d="M-49 0 H-77 M49 0 H77"/>
+    <rect class="habitat-dome" x="-48" y="-43" width="96" height="86" rx="3"/>
+    <rect class="building-room room-left" x="-38" y="-33" width="35" height="29" rx="1"/>
+    <rect class="building-room room-right" x="4" y="-33" width="34" height="29" rx="1"/>
+    <rect class="building-room room-lower" x="-38" y="5" width="76" height="28" rx="1"/>
+    <path class="building-wall" d="M0 -43 V-4 M-48 0 H48 M-38 -4 H38 M-38 5 H38"/>
+    <path class="warm-window" d="M-31 -28 H-18 M10 -28 H25 M-28 11 H-14 M17 11 H30"/>
+    <rect class="habitat-door" x="-8" y="-4" width="16" height="15" rx="1"/>
+    <rect class="quarter-module" x="-121" y="-26" width="42" height="52" rx="2"/>
+    <rect class="quarter-window" x="-113" y="-17" width="26" height="15" rx="1"/>
+    <rect class="quarter-window" x="-113" y="6" width="26" height="12" rx="1"/>
+    <rect class="quarter-module" x="79" y="-26" width="42" height="52" rx="2"/>
+    <rect class="quarter-window" x="87" y="-17" width="26" height="15" rx="1"/>
+    <rect class="quarter-window" x="87" y="6" width="26" height="12" rx="1"/>
+    <circle class="habitat-beacon" cx="0" cy="-50" r="4"/>
+    <text class="structure-label" x="0" y="80">HABITAT + QUARTERS · ${crew} CREW</text>
   </g>`;
 }
 
 function facilityStructureMarkup(buildingId: BuildingId, index: number): string {
   const positions = [
-    { x: 255, y: 198 },
-    { x: 750, y: 191 },
-    { x: 788, y: 407 },
-    { x: 228, y: 425 },
-    { x: 510, y: 515 },
-    { x: 505, y: 119 },
+    { x: 366, y: 249 },
+    { x: 500, y: 236 },
+    { x: 634, y: 249 },
+    { x: 366, y: 435 },
+    { x: 634, y: 435 },
+    { x: 500, y: 456 },
   ];
   const { x, y } = positions[index % positions.length];
   const definition = BUILDINGS.find((building) => building.id === buildingId);
   if (!definition) throw new Error(`Unknown facility on sector map: ${buildingId}.`);
+  const shell = `<rect class="facility-shell" x="-49" y="-34" width="98" height="68" rx="2"/>
+    <rect class="facility-floor" x="-42" y="-27" width="84" height="54" rx="1"/>`;
   const structure = buildingId === 'living-quarters'
-    ? `<ellipse class="structure-shadow" cx="0" cy="20" rx="63" ry="16"/>
-       <path class="habitat-dome small-dome" d="M-32 9 C-31 -18 -18 -34 0 -39 C18 -34 31 -18 32 9 Z"/>
-       <rect class="quarter-module" x="35" y="-8" width="30" height="18" rx="4"/>
-       <path class="quarter-roof" d="M32 -8 L50 -20 L68 -8 Z"/>
-       <path class="habitat-tunnel" d="M29 2 L36 2"/>
+    ? `${shell}<path class="building-wall" d="M0 -27 V27 M-42 0 H42"/>
+       <path class="warm-window" d="M-32 -19 H-15 M11 -19 H30 M-31 10 H-14 M13 10 H31"/>
+       <rect class="habitat-door" x="-7" y="-7" width="14" height="14" rx="1"/>
        <text class="structure-label" x="0" y="37">LIVING QUARTERS</text>`
     : buildingId === 'solar-array'
-      ? `<ellipse class="structure-shadow" cx="0" cy="18" rx="77" ry="14"/>
-         <path class="solar-frame" d="M-12 6 L-4 -9 L4 -9 L12 6 M0 -9 L0 -30"/>
-         <path class="solar-panel" d="M-69 -38 L-12 -30 L-14 -7 L-71 -18 Z"/>
-         <path class="solar-panel" d="M12 -30 L69 -38 L71 -18 L14 -7 Z"/>
-         <path class="solar-cell-line" d="M-51 -35 L-53 -15 M-32 -33 L-34 -11 M-15 -30 L-17 -8 M15 -30 L17 -8 M32 -33 L34 -11 M51 -35 L53 -15"/>
+      ? `<rect class="solar-panel" x="-58" y="-29" width="44" height="58" rx="1"/>
+         <rect class="solar-panel" x="14" y="-29" width="44" height="58" rx="1"/>
+         <path class="solar-cell-line" d="M-43 -29 V29 M-28 -29 V29 M-58 -10 H-14 M-58 9 H-14 M29 -29 V29 M44 -29 V29 M14 -10 H58 M14 9 H58"/>
+         <path class="solar-frame" d="M-8 -24 V24 M8 -24 V24 M-8 0 H8"/>
          <text class="structure-label" x="0" y="36">SOLAR ARRAY</text>`
       : buildingId === 'hydroponics'
-        ? `<ellipse class="structure-shadow" cx="0" cy="18" rx="59" ry="14"/>
-           <path class="greenhouse-shell" d="M-47 10 L-37 -24 Q0 -51 37 -24 L47 10 Z"/>
-           <path class="greenhouse-rib" d="M-24 -5 Q-20 -32 0 -42 Q20 -32 24 -5 M0 -42 L0 10 M-37 -24 L37 -24"/>
-           <path class="facility-door" d="M-9 10 L-9 -6 Q0 -18 9 -6 L9 10 Z"/>
+        ? `${shell}<rect class="greenhouse-shell" x="-38" y="-23" width="76" height="46" rx="1"/>
+           <path class="greenhouse-rib" d="M-24 -18 V18 M-8 -18 V18 M8 -18 V18 M24 -18 V18 M-33 0 H33"/>
            <text class="structure-label" x="0" y="36">HYDROPONICS</text>`
         : buildingId === 'ice-extractor'
-          ? `<ellipse class="structure-shadow" cx="0" cy="18" rx="52" ry="13"/>
-             <path class="rig-frame" d="M-25 10 L0 -49 L25 10 M-17 -8 L17 -8 M-11 -24 L11 -24 M-6 -38 L6 -38 M0 -49 L0 14"/>
-             <rect class="rig-housing" x="-34" y="5" width="68" height="12" rx="3"/>
+          ? `${shell}<circle class="rig-housing" cx="0" cy="0" r="19"/>
+             <circle class="rig-frame" cx="0" cy="0" r="8"/>
+             <path class="rig-frame" d="M-30 0 H30 M0 -25 V25"/>
+             <path class="warm-window" d="M-38 -23 H-27 M27 23 H38"/>
              <text class="structure-label" x="0" y="36">ICE EXTRACTOR</text>`
           : buildingId === 'oxygen-recycler'
-            ? `<ellipse class="structure-shadow" cx="0" cy="18" rx="53" ry="13"/>
-               <rect class="recycler-tank" x="-34" y="-22" width="24" height="34" rx="10"/>
-               <rect class="recycler-tank tank-secondary" x="7" y="-30" width="27" height="42" rx="12"/>
-               <path class="recycler-pipe" d="M-10 -7 L7 -7 M-22 -23 L-22 -31 L20 -31"/>
+            ? `${shell}<rect class="recycler-tank" x="-30" y="-19" width="23" height="38" rx="2"/>
+               <rect class="recycler-tank tank-secondary" x="7" y="-19" width="23" height="38" rx="2"/>
+               <path class="recycler-pipe" d="M-7 0 H7 M-18 -10 H18"/>
                <text class="structure-label" x="0" y="36">OXYGEN RECYCLER</text>`
-            : `<ellipse class="structure-shadow" cx="0" cy="18" rx="57" ry="13"/>
-               <path class="mine-hill" d="M-50 12 Q-24 -14 0 -22 Q24 -14 50 12 Z"/>
-               <path class="mine-track" d="M-44 12 L-17 1 L-3 8 L18 -9 L43 12 M-24 -5 L-18 -14 L-4 -14"/>
-               <circle class="mine-ore" cx="28" cy="-12" r="5"/>
+            : `${shell}<rect class="mine-hill" x="-31" y="-20" width="62" height="40" rx="1"/>
+               <path class="mine-track" d="M-22 0 H22 M0 -14 V14"/>
+               <circle class="mine-ore" cx="0" cy="0" r="7"/>
+               <path class="warm-window" d="M-38 -23 H-27 M27 23 H38"/>
                <text class="structure-label" x="0" y="36">SURFACE MINE</text>`;
   return `<g class="colony-structure facility-structure ${buildingId}" transform="translate(${x} ${y})" role="img" aria-label="${esc(definition.name)}">
     <title>${esc(definition.name)}</title>${structure}
@@ -381,27 +379,45 @@ function sectorSurfaceMarkup(sector: Sector): string {
         ? 'READY'
         : 'LOW ENERGY';
   return `<div class="surface-panel ${isPolar ? 'surface-polar' : ''}">
-    <div class="surface-sky"><span class="sky-star star-a"></span><span class="sky-star star-b"></span><span class="sky-star star-c"></span>
-      <div class="surface-moonlet"></div><div class="surface-ridge ridge-back"></div><div class="surface-ridge ridge-front"></div>
+    <div class="surface-sky">
       <div class="surface-label"><span class="eyebrow">SECTOR ${String(sector.id + 1).padStart(2, '0')}</span><h2>${esc(sector.name)}</h2><p>${esc(sector.terrain)} · SURFACE OPERATIONS</p></div>
-      <span class="surface-coordinate">LUNAR DAY ${colony?.day}</span>
+      <span class="surface-coordinate">DAY ${colony?.day} · ${colony?.paused ? 'PAUSED' : 'LIVE'}</span>
     </div>
     <div class="surface-grid" aria-label="Sector outpost map">
       <svg class="surface-illustration" viewBox="0 0 1000 640" role="img" aria-label="${esc(sector.name)} terrain and constructed colony buildings">
-        <path class="map-ridge distant-ridge" d="M0 204 L80 144 L150 180 L239 110 L328 195 L414 133 L509 195 L603 116 L700 179 L803 100 L887 164 L1000 122 L1000 312 L0 312 Z"/>
-        <path class="map-ground" d="M0 248 Q120 216 238 251 T470 246 T704 252 T1000 230 L1000 640 L0 640 Z"/>
-        <ellipse class="map-crater crater-one" cx="137" cy="370" rx="83" ry="41"/>
-        <ellipse class="map-crater-inner crater-one-inner" cx="137" cy="368" rx="63" ry="25"/>
-        <ellipse class="map-crater crater-two" cx="862" cy="302" rx="66" ry="32"/>
-        <ellipse class="map-crater-inner crater-two-inner" cx="862" cy="300" rx="48" ry="19"/>
-        <ellipse class="map-crater crater-three" cx="825" cy="529" rx="118" ry="54"/>
-        <ellipse class="map-crater-inner crater-three-inner" cx="825" cy="526" rx="88" ry="35"/>
-        <path class="map-route" d="M500 364 Q414 396 337 361 T188 389 M500 364 Q604 391 711 349 T854 312 M501 376 Q502 438 518 493"/>
-        <path class="map-survey-line" d="M56 500 Q253 442 440 505 T942 487"/>
-        <g class="landing-site" transform="translate(500 365)">
-          <ellipse cx="0" cy="15" rx="64" ry="23"/><circle cx="0" cy="-10" r="8"/><path d="M0 -2 V10 M-44 12 H44"/>
-          <text x="0" y="48">${hasHabitat ? 'COLONY LANDING PAD' : 'EXPEDITION LANDING SITE'}</text>
+        <defs>
+          <pattern id="map-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M20 0 H0 V20" fill="none" stroke="#607986" stroke-width="1"/>
+          </pattern>
+          <pattern id="map-frost" width="64" height="64" patternUnits="userSpaceOnUse">
+            <path d="M5 10v4m3-2H5m16 21v5m3-3h-3m18-22v3m-2-2h3m12 34v4m-3-3h4m-5-42v3m-2-2h4" fill="none" stroke="#344a55" stroke-width="1.5"/>
+            <circle cx="31" cy="9" r="1.5" fill="#455b66"/>
+            <circle cx="11" cy="48" r="1" fill="#344a55"/>
+            <circle cx="57" cy="27" r="1.3" fill="#536976"/>
+          </pattern>
+        </defs>
+        <rect class="map-ground" width="1000" height="640"/>
+        <rect class="map-frost" width="1000" height="640"/>
+        <rect class="map-grid" width="1000" height="640"/>
+        <path class="map-contour" d="M-20 142 Q154 84 279 150 T531 138 T793 155 T1030 105 M-20 174 Q154 116 279 182 T531 170 T793 187 T1030 137"/>
+        <path class="map-contour" d="M-20 496 Q133 444 272 508 T548 486 T814 510 T1030 460 M-20 526 Q133 474 272 538 T548 516 T814 540 T1030 490"/>
+        <path class="map-dark-ground" d="M-20 39 L63 48 L76 86 L48 113 L30 154 L-20 145 Z M-20 420 L74 402 L116 439 L101 491 L47 511 L-20 491 Z M858 43 L909 62 L931 102 L1009 109 L1020 152 L950 164 L916 134 L874 129 Z M832 526 L890 501 L932 512 L952 557 L1008 570 L1015 654 L814 654 L817 601 Z"/>
+        <ellipse class="map-crater" cx="146" cy="255" rx="91" ry="47"/>
+        <ellipse class="map-crater-inner" cx="146" cy="255" rx="69" ry="30"/>
+        <ellipse class="map-crater" cx="847" cy="421" rx="111" ry="58"/>
+        <ellipse class="map-crater-inner" cx="847" cy="421" rx="84" ry="37"/>
+        <g class="map-rocks" aria-hidden="true">
+          <path d="M90 367 l11 -8 12 5 4 11 -9 8 -15 -3z M288 138 l9 -6 9 4 3 8 -8 7 -12 -3z M716 236 l12 -9 12 6 1 11 -10 8 -14 -5z M921 176 l8 -7 11 3 5 9 -9 8 -12 -4z M650 544 l13 -8 10 5 2 10 -11 8 -13 -4z M352 529 l9 -8 11 4 2 8 -8 7 -12 -3z"/>
+          <circle cx="127" cy="465" r="7"/><circle cx="755" cy="342" r="9"/><circle cx="535" cy="116" r="6"/>
+          <circle cx="388" cy="198" r="5"/><circle cx="961" cy="536" r="7"/><circle cx="76" cy="166" r="5"/>
         </g>
+        <ellipse class="base-clearing" cx="500" cy="345" rx="174" ry="122"/>
+        <path class="map-route" d="M500 342 Q422 326 358 285 T226 254 M500 342 Q592 354 681 402 T824 431 M500 342 Q494 420 501 502"/>
+        <path class="map-survey-line" d="M69 582 Q253 545 431 573 T931 571"/>
+        ${hasHabitat ? '' : `<g class="landing-site" transform="translate(500 365)">
+          <ellipse cx="0" cy="0" rx="47" ry="29"/><circle cx="0" cy="0" r="8"/><path d="M-31 -19 L31 19 M31 -19 L-31 19"/>
+          <text x="0" y="48">EXPEDITION SITE</text>
+        </g>`}
         ${hasHabitat ? habitatMarkup(colony?.people ?? 0) : ''}
         ${buildings.filter((id) => id !== 'habitat').map((id, index) => facilityStructureMarkup(id, index)).join('')}
         <g class="map-resource-site" transform="translate(420 465)"><circle r="16"/><path d="M-6 3 L-1 -5 L4 1 L9 -7"/><text y="34">MINERAL RIDGE</text></g>
@@ -417,6 +433,228 @@ function sectorSurfaceMarkup(sector: Sector): string {
     </div>
     <div class="surface-bottom"><span><i class="live-dot"></i> SURFACE LINK STABLE</span><span>FIELD TEAM · ${colony?.people} CREW</span><span>OPERATIONS ${fieldworkComplete ? 'COMPLETE' : colony?.paused ? 'PAUSED' : 'READY'}</span></div>
   </div>`;
+}
+
+function renderPixelatedSurfaceMap(): void {
+  const svg = document.querySelector<SVGSVGElement>('.surface-illustration');
+  if (!svg || svg.dataset.pixelated === 'true') return;
+  const contextElement = svg.parentElement;
+  if (!contextElement) throw new Error('Surface map is missing its drawing container.');
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'pixelated-map';
+  canvas.width = 500;
+  canvas.height = 320;
+  canvas.setAttribute('aria-hidden', 'true');
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Could not create the pixelated surface map.');
+  context.imageSmoothingEnabled = false;
+
+  const width = 250;
+  const height = 160;
+  const pixelScale = 2;
+  context.setTransform(pixelScale, 0, 0, pixelScale, 0, 0);
+  context.fillStyle = '#9bb3b9';
+  context.fillRect(0, 0, width, height);
+
+  const zoom = 1.35;
+  const cameraX = 125;
+  const cameraY = 85;
+  context.setTransform(
+    pixelScale * zoom,
+    0,
+    0,
+    pixelScale * zoom,
+    pixelScale * (width / 2 - cameraX * zoom),
+    pixelScale * (height / 2 - cameraY * zoom),
+  );
+
+  for (let y = 0; y < height; y += 3) {
+    for (let x = 0; x < width; x += 3) {
+      const shade = (x * 17 + y * 31 + Math.floor((x * y) / 7)) % 19;
+      if (shade < 6) {
+        context.fillStyle = shade % 2 ? '#a8bec1' : '#8fa9b0';
+        context.fillRect(x, y, 3, 3);
+      }
+    }
+  }
+
+  context.fillStyle = 'rgba(42, 59, 65, .82)';
+  const groundPatches = [
+    [[0, 5], [13, 7], [18, 12], [15, 20], [8, 24], [0, 22]],
+    [[0, 102], [14, 99], [22, 107], [19, 119], [9, 124], [0, 121]],
+    [[217, 8], [228, 11], [235, 17], [250, 18], [250, 31], [236, 30], [226, 23]],
+    [[204, 132], [218, 125], [231, 128], [237, 139], [250, 143], [250, 160], [202, 160]],
+    [[75, 135], [82, 130], [91, 131], [96, 138], [89, 143], [78, 142]],
+    [[167, 112], [176, 108], [182, 112], [180, 119], [171, 120]],
+  ];
+  for (const patch of groundPatches) {
+    context.beginPath();
+    patch.forEach(([x, y], index) => {
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    });
+    context.closePath();
+    context.fill();
+  }
+
+  context.fillStyle = '#50666d';
+  context.beginPath();
+  context.arc(37, 63, 23, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = '#7f999f';
+  context.beginPath();
+  context.arc(37, 63, 17, 0, Math.PI * 2);
+  context.fill();
+  context.beginPath();
+  context.arc(211, 108, 27, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = '#718990';
+  context.beginPath();
+  context.arc(211, 108, 20, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = '#435960';
+  for (let y = 1; y < height; y += 2) {
+    for (let x = 1; x < width; x += 2) {
+      const fleck = (x * 23 + y * 19 + Math.floor((x * y) / 5)) % 29;
+      if (fleck < 4) {
+        context.fillRect(x, y, fleck % 3 === 0 ? 1.5 : 1, fleck % 2 === 0 ? 1.5 : 1);
+      }
+    }
+  }
+
+  context.strokeStyle = 'rgba(62, 82, 89, .22)';
+  context.lineWidth = 0.25;
+  for (let x = 3; x < width; x += 3) {
+    context.beginPath();
+    context.moveTo(x, 0);
+    context.lineTo(x, height);
+    context.stroke();
+  }
+  for (let y = 3; y < height; y += 3) {
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(width, y);
+    context.stroke();
+  }
+
+  context.fillStyle = 'rgba(202, 220, 217, .34)';
+  context.beginPath();
+  context.ellipse(125, 86, 45, 31, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.strokeStyle = 'rgba(48, 65, 70, .52)';
+  context.lineWidth = 2;
+  context.setLineDash([2, 4]);
+  context.beginPath();
+  context.moveTo(125, 85);
+  context.lineTo(91, 62);
+  context.moveTo(125, 85);
+  context.lineTo(212, 72);
+  context.moveTo(125, 85);
+  context.lineTo(125, 126);
+  context.stroke();
+  context.setLineDash([]);
+
+  const colors: Record<string, string> = {
+    habitat: '#f0b968',
+    'living-quarters': '#e8b66d',
+    'solar-array': '#8ec6d0',
+    hydroponics: '#a8c987',
+    'ice-extractor': '#a5d6dc',
+    'oxygen-recycler': '#c5b3d5',
+    'regolith-mine': '#d5a45f',
+  };
+  const drawPixelBuilding = (x: number, y: number, radius: number, light: string): void => {
+    const px = Math.round(x);
+    const py = Math.round(y);
+    const cell = radius / 6;
+    const rowWidths = [3, 7, 9, 11, 13, 13, 13, 13, 13, 11, 9, 7, 3];
+
+    for (let row = 0; row < rowWidths.length; row += 1) {
+      const halfWidth = Math.floor(rowWidths[row] / 2);
+      for (let column = -halfWidth; column <= halfWidth; column += 1) {
+        context.fillStyle = '#192429';
+        context.fillRect(
+          px + column * cell + cell,
+          py + (row - 6) * cell + cell,
+          cell,
+          cell,
+        );
+      }
+    }
+
+    for (let row = 0; row < rowWidths.length; row += 1) {
+      const halfWidth = Math.floor(rowWidths[row] / 2);
+      for (let column = -halfWidth; column <= halfWidth; column += 1) {
+        const distance = column * column + (row - 6) * (row - 6);
+        context.fillStyle =
+          distance >= 32 ? '#1c292e'
+            : distance >= 18 ? '#e3dce8'
+              : distance >= 8 ? '#796d89'
+                : '#272a35';
+        context.fillRect(
+          px + column * cell,
+          py + (row - 6) * cell,
+          cell,
+          cell,
+        );
+      }
+    }
+
+    context.fillStyle = '#46535a';
+    context.fillRect(px - cell, py - cell, cell * 2, cell * 2);
+    context.fillStyle = light;
+    context.fillRect(px - cell, py - cell, cell, cell);
+    context.fillStyle = '#f2edf3';
+    context.fillRect(px + cell, py - cell, cell, cell);
+    context.fillStyle = light;
+    context.fillRect(px - 4 * cell, py, cell, cell);
+    context.fillRect(px + 3 * cell, py, cell, cell);
+  };
+
+  const drawSiteMarker = (x: number, y: number, radius: number, light: string): void => {
+    const px = Math.round(x);
+    const py = Math.round(y);
+    context.fillStyle = '#1c292e';
+    context.beginPath();
+    context.arc(px, py, radius + 2, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = '#e3dce8';
+    context.beginPath();
+    context.arc(px, py, radius, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = light;
+    context.fillRect(px - 1, py - 1, 2, 2);
+  };
+
+  const toCanvasPoint = (element: Element): { x: number; y: number } | null => {
+    const match = element.getAttribute('transform')?.match(/translate\(([\d.]+)\s+([\d.]+)\)/);
+    return match
+      ? { x: Number(match[1]) * width / 1000, y: Number(match[2]) * height / 640 }
+      : null;
+  };
+
+  if (svg.querySelector('.habitat-structure')) {
+    drawPixelBuilding(125, 85, 13, colors.habitat);
+    drawPixelBuilding(103, 85, 7, colors['living-quarters']);
+    drawPixelBuilding(147, 85, 7, colors['living-quarters']);
+  }
+  svg.querySelectorAll<SVGGElement>('.facility-structure').forEach((building) => {
+    const point = toCanvasPoint(building);
+    if (!point) return;
+    const buildingType = Object.keys(colors).find((type) => building.classList.contains(type));
+    drawPixelBuilding(point.x, point.y, 9, colors[buildingType ?? 'regolith-mine']);
+  });
+  svg.querySelectorAll<SVGGElement>('.landing-site, .map-resource-site').forEach((site) => {
+    const point = toCanvasPoint(site);
+    if (point) drawSiteMarker(point.x, point.y, site.classList.contains('landing-site') ? 6 : 5, '#f2c56f');
+  });
+
+  contextElement.insertBefore(canvas, svg.nextSibling);
+  svg.classList.add('pixelated-map-source');
+  svg.dataset.pixelated = 'true';
 }
 
 function sectorScreenMarkup(): string {
@@ -650,6 +888,8 @@ function render(): void {
         mount.innerHTML = '<div class="scene-error"><span>⚠</span><strong>3D atlas unavailable</strong><p>Try a WebGL-enabled browser to explore the lunar globe. Use the sector list to continue.</p></div>';
       }
     }
+  } else {
+    renderPixelatedSurfaceMap();
   }
 }
 
