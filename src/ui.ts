@@ -2,6 +2,7 @@ import { MoonScene } from './moon-scene';
 import {
   BUILDINGS,
   DAY_LENGTH_MS,
+  DUST_STORM_VISUAL_DURATION_MS,
   FIELDWORK,
   RESOURCE_INFO,
   RESOURCE_ORDER,
@@ -10,12 +11,14 @@ import {
   buildStructure,
   canPerformFieldwork,
   canUnlock,
+  colonyHasSolarPanels,
   createColony,
   getDailyResourceRates,
   getDefaultBuildingPlacement,
   getHazardCost,
   getHazardDescription,
   getHazardTitle,
+  getHazardsForSector,
   getMaintenanceChance,
   getSector,
   isFirstBuildFree,
@@ -53,6 +56,7 @@ const MAX_MAP_ZOOM = 2.4;
 const MAP_ZOOM_STEP = 0.15;
 let mapZoom = BASE_MAP_ZOOM;
 let crewAnimationFrame: number | null = null;
+const seenMeteoriteEventIds = new Set<number>();
 
 interface CrewStop {
   id: string;
@@ -176,6 +180,7 @@ function hazardBoardMarkup(): string {
   const maintenanceChance = Math.round(
     getMaintenanceChance(activeColony.unlockedSectors.length) * 100,
   );
+  const hasSolarPanels = colonyHasSolarPanels(activeColony);
   const activeEvents = activeColony.hazardEvents.map((event) => {
     const category =
       event.kind === 'meteorite-impact' || event.kind === 'dust-storm'
@@ -194,7 +199,7 @@ function hazardBoardMarkup(): string {
     return `<article class="hazard-card">
       <div class="hazard-card-copy">
         <strong><small>${category}</small> ${esc(getHazardTitle(event))}</strong><span>DAY ${event.day}${esc(target)}</span>
-        <p>${esc(getHazardDescription(event))}</p>
+        <p>${esc(getHazardDescription(event, hasSolarPanels))}</p>
         <small>Repair cost: ${esc(costLabel)}</small>
       </div>
       <button class="hazard-repair" data-action="repair-hazard" data-event-id="${event.id}"
@@ -286,10 +291,16 @@ function sectorListMarkup(): string {
   return SECTORS.map((sector) => {
     const unlocked = colony?.unlockedSectors.includes(sector.id) ?? false;
     const selected = sector.id === inspectedSectorId;
+    const activeHazards = getHazardsForSector(colony, sector.id);
+    const hazardNames = activeHazards.map(getHazardTitle).join(', ');
+    const warningIndicator = activeHazards.length
+      ? `<span class="sector-warning-indicator" role="img"
+          aria-label="Active hazards: ${esc(hazardNames)}" title="Active hazards: ${esc(hazardNames)}">!</span>`
+      : '';
     return `<button class="sector-row ${selected ? 'is-selected' : ''} ${unlocked ? 'is-unlocked' : 'is-locked'}"
       data-action="inspect-sector" data-sector="${sector.id}" aria-pressed="${selected}">
       <span class="sector-index">${String(sector.id + 1).padStart(2, '0')}</span>
-      <span class="sector-row-copy"><strong>${esc(sector.name)}</strong><small>${unlocked ? 'OUTPOST ACTIVE' : 'UNEXPLORED'}</small></span>
+      <span class="sector-row-copy"><strong><span class="sector-row-name">${esc(sector.name)}</span>${warningIndicator}</strong><small>${unlocked ? 'OUTPOST ACTIVE' : 'UNEXPLORED'}</small></span>
       <span class="sector-state">${unlocked ? '●' : '⌑'}</span>
     </button>`;
   }).join('');
@@ -439,9 +450,6 @@ function sectorResourceMarkup(): string {
   }).join('');
 }
 
-function habitatMarkup(crew: number): string {
-  return `<g class="colony-structure habitat-structure" transform="translate(500 342)" role="img" aria-label="Starter shelter with crew homes">
-    <title>Starter shelter and crew homes</title>
 function buildingWarningMarkup(hazard: HazardEvent | undefined, x: number, y: number): string {
   if (!hazard) return '';
   return `<g class="building-warning-sign" transform="translate(${x} ${y})" aria-hidden="true">
@@ -460,6 +468,34 @@ function meteoriteImpactMarkup(hazard: HazardEvent | undefined, x: number, y: nu
     <path class="impact-debris" d="M-24 -5 l-8 -4 5 8z M21 -5 l9 -6 -3 9z M-9 -9 l-5 -7 8 4z"/>
     <path class="meteorite-fragment" d="M-4 -1 L-1 -8 6 -6 9 0 2 3z"/>
   </g>`;
+}
+
+function meteoriteArrivalMarkup(
+  hazard: HazardEvent | undefined,
+  placement: BuildingPlacement | undefined,
+): string {
+  if (
+    hazard?.kind !== 'meteorite-impact' ||
+    hazard.buildingId === null ||
+    seenMeteoriteEventIds.has(hazard.id)
+  ) {
+    return '';
+  }
+  const impactPoint =
+    hazard.buildingId === 'habitat'
+      ? { x: 60.8, y: 59.6875 }
+      : placement
+        ? { x: placement.x * 100 + 5.3, y: placement.y * 100 + 3.75 }
+        : null;
+  if (!impactPoint) return '';
+
+  return `<span class="meteorite-arrival" data-meteorite-event="${hazard.id}" style="left:${impactPoint.x}%;top:${impactPoint.y}%" aria-hidden="true">
+    <span class="meteorite-streak">
+      <span class="meteorite-trail"></span>
+      <span class="meteorite-projectile"></span>
+    </span>
+    <span class="meteorite-flash"></span>
+  </span>`;
 }
 
 function hazardWarningLabel(hazard: HazardEvent | undefined): string {
@@ -488,7 +524,6 @@ function habitatMarkup(crew: number, hazard?: HazardEvent): string {
     <rect class="quarter-window" x="87" y="6" width="26" height="12" rx="1"/>
     <circle class="habitat-beacon" cx="0" cy="-50" r="4"/>
     <text class="structure-label" x="0" y="80">STARTER SHELTER · ${crew} CREW</text>
-    <text class="structure-label" x="0" y="80">HABITAT + QUARTERS · ${crew} CREW</text>
     ${meteoriteImpactMarkup(hazard, 108, 40)}
     ${buildingWarningMarkup(hazard, 126, -49)}
   </g>`;
@@ -567,24 +602,9 @@ function facilityStructureMarkup(
                            <rect class="mine-ore" x="-5" y="-5" width="10" height="10"/>
                            <path class="mine-track" d="M-38 23 H38 M-28 18 V27 M28 18 V27"/>
                            <text class="structure-label" x="0" y="36">DEEP MINE</text>`;
-  const accessibleName = `${definition.name} facility ${instanceNumber}`;
+  const accessibleName = `${definition.name} facility ${instanceNumber}${hazardWarningLabel(hazard)}`;
   return `<g class="colony-structure facility-structure ${buildingId}" transform="translate(${x} ${y})" role="img" aria-label="${esc(accessibleName)}">
-    <title>${esc(accessibleName)}</title>${structure}
-                           <text class="structure-label" x="0" y="36">REGOLITH COLLECTOR</text>`
-                        : buildingId === 'deep-rock-mining'
-                          ? `${shell}<rect class="mine-hill" x="-31" y="-20" width="62" height="40" rx="1"/>
-                             <path class="deep-shaft" d="M0 -18 V18 M-18 0 H18"/>
-                             <rect class="mine-ore" x="-5" y="-5" width="10" height="10"/>
-                             <path class="mine-track" d="M-38 23 H38 M-28 18 V27 M28 18 V27"/>
-                             <text class="structure-label" x="0" y="36">DEEP ROCK MINE</text>`
-                          : `${shell}<rect class="mine-hill" x="-31" y="-20" width="62" height="40" rx="1"/>
-                             <path class="mine-track" d="M-22 0 H22 M0 -14 V14"/>
-                             <circle class="mine-ore" cx="0" cy="0" r="7"/>
-                             <path class="warm-window" d="M-38 -23 H-27 M27 23 H38"/>
-                             <text class="structure-label" x="0" y="36">SURFACE MINE</text>`;
-  const warningLabel = hazardWarningLabel(hazard);
-  return `<g class="colony-structure facility-structure ${buildingId}" transform="translate(${x} ${y})" role="img" aria-label="${esc(`${definition.name}${warningLabel}`)}">
-    <title>${esc(`${definition.name}${warningLabel}`)}</title>
+    <title>${esc(accessibleName)}</title>
     ${meteoriteImpactMarkup(hazard, 53, 24)}
     ${structure}
     ${buildingWarningMarkup(hazard, 43, -42)}
@@ -602,11 +622,29 @@ function sectorSurfaceMarkup(sector: Sector): string {
   const isPolar = sector.latitude > 45 || sector.latitude < -45;
   const buildings = colony?.buildings[sector.id] ?? [];
   const hasHabitat = buildings.includes('habitat');
-  const hasDustStorm = colony?.hazardEvents.some((event) => event.kind === 'dust-storm') ?? false;
+  const dustStorm = colony?.hazardEvents.find((event) => event.kind === 'dust-storm');
+  const dustStormRemainingMs = (dustStorm?.dustStormVisualEndsAt ?? 0) - Date.now();
+  const dustStormAgeMs = Math.max(
+    0,
+    Math.min(
+      DUST_STORM_VISUAL_DURATION_MS,
+      DUST_STORM_VISUAL_DURATION_MS - dustStormRemainingMs,
+    ),
+  );
+  const hasDustStorm = Boolean(dustStorm && dustStormRemainingMs > 0);
   const hazardForBuilding = (buildingId: BuildingId) =>
     colony?.hazardEvents.find(
       (event) => event.sectorId === sector.id && event.buildingId === buildingId,
     );
+  const meteoriteHazard = colony?.hazardEvents.find(
+    (event) => event.kind === 'meteorite-impact' && event.sectorId === sector.id,
+  );
+  const meteoritePlacement =
+    meteoriteHazard?.buildingId && meteoriteHazard.buildingId !== 'habitat'
+      ? colony?.buildingPlacements[sector.id]?.find(
+          (placement) => placement.buildingId === meteoriteHazard.buildingId,
+        )
+      : undefined;
   const fieldworkComplete = colony?.lastFieldworkDay === colony?.day;
   const pendingBuilding = pendingBuildingId
     ? BUILDINGS.find((building) => building.id === pendingBuildingId)
@@ -674,25 +712,25 @@ function sectorSurfaceMarkup(sector: Sector): string {
           <ellipse cx="0" cy="0" rx="47" ry="29"/><circle cx="0" cy="0" r="8"/><path d="M-31 -19 L31 19 M31 -19 L-31 19"/>
           <text x="0" y="48">EXPEDITION SITE</text>
         </g>`}
-        ${hasHabitat ? habitatMarkup(colony?.people ?? 0) : ''}
         ${(colony?.buildingPlacements[sector.id] ?? []).map((placement, index) =>
-          facilityStructureMarkup(placement.buildingId, placement, index + 1),
+          facilityStructureMarkup(
+            placement.buildingId,
+            placement,
+            index + 1,
+            hazardForBuilding(placement.buildingId),
+          ),
         ).join('')}
         ${hasHabitat ? habitatMarkup(colony?.people ?? 0, hazardForBuilding('habitat')) : ''}
-        ${buildings.filter((id) => id !== 'habitat').map((id) => {
-          const placement = colony!.buildingPlacements[sector.id]?.[id];
-          if (!placement) throw new Error(`Missing saved location for ${id}.`);
-          return facilityStructureMarkup(id, placement, hazardForBuilding(id));
-        }).join('')}
         <g class="map-resource-site" transform="translate(420 465)"><circle r="16"/><path d="M-6 3 L-1 -5 L4 1 L9 -7"/><text y="34">MINERAL RIDGE</text></g>
         ${sector.iceDeposits ? '<g class="map-resource-site ice-resource-site" transform="translate(847 288)"><circle r="16"/><path d="M0 -9 V9 M-8 -4 L8 4 M8 -4 L-8 4"/><text y="34">SHADOWED ICE</text></g>' : ''}
         </svg>
+        ${meteoriteArrivalMarkup(meteoriteHazard, meteoritePlacement)}
         <div class="facility-nameplate-layer">
           ${(colony?.buildingPlacements[sector.id] ?? []).map((placement) =>
             facilityNameplateMarkup(placement.buildingId, placement),
           ).join('')}
         </div>
-        ${hasDustStorm ? '<div class="dust-storm-effect" role="img" aria-label="Dust storm sweeping across the lunar surface"></div>' : ''}
+        ${hasDustStorm ? `<div class="dust-storm-effect" style="--dust-storm-duration:${DUST_STORM_VISUAL_DURATION_MS}ms;--dust-storm-age:-${dustStormAgeMs}ms;--dust-storm-drift-delay:-${dustStormAgeMs % 5000}ms" role="img" aria-label="Dust storm sweeping across the lunar surface"></div>` : ''}
         ${pendingBuilding && placementCursor ? `<div class="placement-preview ${cursorIsValid ? '' : 'is-invalid'}" style="left:${placementCursor.x * 100}%;top:${placementCursor.y * 100}%" aria-hidden="true"><span></span></div>` : ''}
         <button class="worksite-marker prospect-site ${prospectingAvailable ? 'worksite-ready' : ''}" data-action="fieldwork" data-fieldwork="prospecting" ${prospectingAvailable ? '' : 'disabled'} aria-label="Prospect mineral ridge: spend 4 energy to collect 2 metal and 5 lunar regolith. ${prospectStatus}">
           <span class="worksite-icon">⌕</span><strong>MINERAL RIDGE</strong><small>−4 ENERGY · +2 METAL · +5 REGOLITH</small><em>${prospectStatus}</em>
@@ -1122,9 +1160,6 @@ function renderPixelatedSurfaceMap(): void {
     const radius = 9;
     drawPixelBuilding(point.x, point.y, radius, colors[buildingType], buildingType);
     drawBuildingLogo(point.x, point.y, radius, buildingType);
-    const buildingType = (Object.keys(colors) as BuildingId[]).find((type) => building.classList.contains(type))
-      ?? 'regolith-mine';
-    drawPixelBuilding(point.x, point.y, 9, colors[buildingType], buildingType);
     if (building.querySelector('.building-warning-sign')) {
       warningSites.push({ x: point.x + 11, y: point.y - 10.5 });
     }
@@ -1605,6 +1640,7 @@ function handleAction(button: HTMLElement): void {
       pendingBuildingId = null;
       placementCursor = null;
       starterTutorialVisible = false;
+      seenMeteoriteEventIds.clear();
       screen = 'atlas';
       colony = null;
       inspectedSectorId = 0;
@@ -1719,6 +1755,13 @@ function render(): void {
 }
 
 export function startApplication(root: HTMLDivElement): void {
+  root.addEventListener('animationend', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element) || !target.matches('.meteorite-flash')) return;
+    const eventId = Number(target.closest<HTMLElement>('.meteorite-arrival')?.dataset.meteoriteEvent);
+    if (Number.isInteger(eventId) && eventId > 0) seenMeteoriteEventIds.add(eventId);
+  });
+
   root.addEventListener('click', (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
