@@ -114,6 +114,7 @@ Names are reproduced as supplied. Do not merge similarly named areas (for exampl
 - Players can develop or use additional sectors only after unlocking them.
 - The sector management view includes a prominent 2D surface map, operational status, facility construction controls, resource readouts, a terrain field guide, and a next-day timer. Gameplay panels use crisp opaque surfaces and do not blur the map or building information.
 - Render the 2D sector environment in a simple, crisp pixelated style rather than smooth vector artwork. Zoom toward the colony, use cool blue-gray tiled regolith and scattered terrain detail, and depict compact buildings with stepped pixel silhouettes, layered ring-like roof bands, and blocky lit details. Let players zoom the map in or out around the base and reset to the default view; keep fieldwork locations aligned and accessible.
+- Show one distinct pixel-art crew character for every person in the colony. Characters wander between built structures and nearby field sites in the active sector; their movement stops while the simulation is paused or the mission has ended, and respects reduced-motion preferences.
 - The surface map shows constructed facilities and interactive fieldwork locations. Players can perform one field operation each lunar day from their current sector.
 - Facility construction starts a placement mode; players choose an open position on the surface map before costs are paid. Existing structures, the habitat/expedition site, and fieldwork locations cannot be overlapped. Arrow keys move the placement preview, Enter places it, and Escape cancels.
 - Facility locations persist in the colony save and remain attached to their sector when players zoom or reload.
@@ -271,5 +272,6 @@ The initial implementation is ready for review when all of the following are tru
 18. Facility cards explain their colony purpose, construction costs, daily output, and recurring resource use, and the field guide explains a relevant terrain and mission trade-off.
 19. The starting habitat and living quarters, along with each constructed facility, are visibly represented on the 2D sector surface. Building living quarters costs 20 Metal and 16 Lunar regolith and does not increase population.
 20. Players can choose a clear map location for each new facility; blocked locations are rejected, and chosen positions persist after reloading.
+21. The active sector map shows one distinct pixel-art character per crew member; characters wander among buildings and nearby sites, stop when paused or the mission ends, and remain still for reduced-motion preferences.
 
 The economy, day length, and exploration costs are implemented as the initial values in this specification and should be adjusted only with corresponding UI, tests, and documentation updates.
