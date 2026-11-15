@@ -26,6 +26,7 @@ export interface Sector {
   description: string;
   terrain: string;
   surfaceRelief: SectorRelief;
+  productionModifiers: Partial<Record<ResourceKey, number>>;
   unlockMetal: number;
   unlockRegolith: number;
   crewRequired: number;
@@ -150,6 +151,7 @@ export const SECTORS: Sector[] = [
     description: 'A polar landing zone where permanently shadowed terrain may hold valuable water ice.',
     terrain: 'Polar highlands',
     surfaceRelief: 'polar-ice-craters',
+    productionModifiers: { water: 25, metal: -20 },
     unlockMetal: 24,
     unlockRegolith: 18,
     crewRequired: 3,
@@ -163,6 +165,7 @@ export const SECTORS: Sector[] = [
     description: 'Rugged southern terrain with long shadows and challenging routes between ridges.',
     terrain: 'Rugged polar plain',
     surfaceRelief: 'polar-ridges',
+    productionModifiers: { water: 20, oxygen: 25 },
     unlockMetal: 28,
     unlockRegolith: 22,
     crewRequired: 4,
@@ -176,6 +179,7 @@ export const SECTORS: Sector[] = [
     description: 'A high-latitude frontier with low-angle sunlight and cratered polar ground.',
     terrain: 'Polar highlands',
     surfaceRelief: 'polar-craters',
+    productionModifiers: { water: 40, regolith: -40 },
     unlockMetal: 25,
     unlockRegolith: 20,
     crewRequired: 3,
@@ -189,6 +193,7 @@ export const SECTORS: Sector[] = [
     description: 'A cold northern region where shadow, sunlight, and access shape every mission plan.',
     terrain: 'Icy uplands',
     surfaceRelief: 'icy-uplands',
+    productionModifiers: { water: 15 },
     unlockMetal: 30,
     unlockRegolith: 24,
     crewRequired: 4,
@@ -202,6 +207,7 @@ export const SECTORS: Sector[] = [
     description: 'Broad volcanic plains offer open ground for routes, landing areas, and solar fields.',
     terrain: 'Basalt plain',
     surfaceRelief: 'volcanic-plain',
+    productionModifiers: { metal: 40, regolith: -40 },
     unlockMetal: 26,
     unlockRegolith: 20,
     crewRequired: 3,
@@ -214,6 +220,7 @@ export const SECTORS: Sector[] = [
     description: 'Long ridges cross the plain, creating elevated views and uneven construction ground.',
     terrain: 'Ridge belt',
     surfaceRelief: 'wrinkle-ridges',
+    productionModifiers: { metal: 45, water: -40 },
     unlockMetal: 28,
     unlockRegolith: 22,
     crewRequired: 4,
@@ -226,6 +233,7 @@ export const SECTORS: Sector[] = [
     description: 'Ancient volcanic domes reveal a story of lava, heat, and the Moon’s changing interior.',
     terrain: 'Volcanic upland',
     surfaceRelief: 'volcanic-domes',
+    productionModifiers: { food: 25, metal: 10 },
     unlockMetal: 30,
     unlockRegolith: 24,
     crewRequired: 4,
@@ -238,6 +246,7 @@ export const SECTORS: Sector[] = [
     description: 'Winding channels mark a landscape shaped by flowing lava and collapsed tubes.',
     terrain: 'Rille country',
     surfaceRelief: 'sinuous-rille',
+    productionModifiers: { energy: 50, regolith: -50 },
     unlockMetal: 32,
     unlockRegolith: 26,
     crewRequired: 5,
@@ -250,6 +259,7 @@ export const SECTORS: Sector[] = [
     description: 'A large volcanic province with varied plains and room for long-range exploration.',
     terrain: 'Volcanic terrane',
     surfaceRelief: 'volcanic-province',
+    productionModifiers: { metal: 55, oxygen: -50 },
     unlockMetal: 30,
     unlockRegolith: 24,
     crewRequired: 4,
@@ -262,6 +272,7 @@ export const SECTORS: Sector[] = [
     description: 'A northern transition region between sunlit highlands and crater shadows.',
     terrain: 'Northern uplands',
     surfaceRelief: 'shadowed-uplands',
+    productionModifiers: { water: 20 },
     unlockMetal: 34,
     unlockRegolith: 28,
     crewRequired: 5,
@@ -275,6 +286,7 @@ export const SECTORS: Sector[] = [
     description: 'Bright, ancient highlands are heavily cratered and rich in geological history.',
     terrain: 'Highland crust',
     surfaceRelief: 'cratered-highlands',
+    productionModifiers: { regolith: 15, oxygen: 20, water: -35 },
     unlockMetal: 32,
     unlockRegolith: 26,
     crewRequired: 4,
@@ -287,6 +299,7 @@ export const SECTORS: Sector[] = [
     description: 'Layered ejecta and dusty deposits preserve evidence of dramatic impacts.',
     terrain: 'Impact deposits',
     surfaceRelief: 'ejecta-blanket',
+    productionModifiers: { metal: 25, regolith: 20 },
     unlockMetal: 34,
     unlockRegolith: 28,
     crewRequired: 5,
@@ -299,6 +312,7 @@ export const SECTORS: Sector[] = [
     description: 'A broad impact landscape makes geology visible in its rings and fractured floor.',
     terrain: 'Basin floor',
     surfaceRelief: 'impact-basin',
+    productionModifiers: { metal: 30, regolith: 20, energy: -35 },
     unlockMetal: 36,
     unlockRegolith: 30,
     crewRequired: 5,
@@ -311,6 +325,7 @@ export const SECTORS: Sector[] = [
     description: 'Concentric mountain rings frame a challenging route through steep lunar terrain.',
     terrain: 'Concentric massif',
     surfaceRelief: 'concentric-massif',
+    productionModifiers: { regolith: 55, metal: 50, oxygen: -45, water: -45 },
     unlockMetal: 38,
     unlockRegolith: 32,
     crewRequired: 5,
@@ -323,6 +338,7 @@ export const SECTORS: Sector[] = [
     description: 'A permanently shadowed crater demands careful planning for heat, light, and access.',
     terrain: 'Shadowed crater',
     surfaceRelief: 'shadowed-crater',
+    productionModifiers: { water: 45, metal: 40, energy: -65 },
     unlockMetal: 40,
     unlockRegolith: 34,
     crewRequired: 6,
@@ -685,6 +701,10 @@ export function getSector(id: number): Sector {
   return sector;
 }
 
+function roundResourceAmount(amount: number): number {
+  return Math.round((amount + Number.EPSILON) * 100) / 100;
+}
+
 export function getBuilding(id: BuildingId): BuildingDefinition {
   const building = BUILDINGS.find((item) => item.id === id);
   if (!building) throw new Error(`Unknown building: ${id}`);
@@ -898,7 +918,9 @@ export function getDailyResourceRates(colony: ColonySave): Resources {
       if (hasBuildingIssue(colony.hazardEvents, sectorId, buildingId)) continue;
       const building = getBuilding(buildingId);
       for (const resource of RESOURCE_ORDER) {
-        let production = building.production[resource] ?? 0;
+        const modifier = getSector(sectorId).productionModifiers[resource] ?? 0;
+        let production =
+          (building.production[resource] ?? 0) * (1 + modifier / 100);
         if (
           dustStormActive &&
           resource === 'energy' &&
@@ -910,6 +932,9 @@ export function getDailyResourceRates(colony: ColonySave): Resources {
       }
     }
   }
+  RESOURCE_ORDER.forEach((resource) => {
+    rates[resource] = roundResourceAmount(rates[resource]);
+  });
   return rates;
 }
 
@@ -964,9 +989,13 @@ export function advanceDay(colony: ColonySave, now = Date.now()): ColonySave {
   if (colony.paused || colony.failed) return colony;
 
   const rates = getDailyResourceRates(colony);
+
   const resources = { ...colony.resources };
   for (const resource of RESOURCE_ORDER) {
-    resources[resource] = Math.max(0, resources[resource] + rates[resource]);
+    resources[resource] = Math.max(
+      0,
+      roundResourceAmount(resources[resource] + rates[resource]),
+    );
   }
 
   const missingLifeSupport = (['water', 'food', 'oxygen', 'energy'] as const).find(
@@ -1193,7 +1222,7 @@ export function validateSave(value: unknown): ColonySave {
     (presentHazardFields !== 0 && presentHazardFields !== hazardFields.length) ||
     (sourceVersion === SAVE_VERSION && presentHazardFields !== hazardFields.length)
   ) {
-    throw new Error('Save data is incomplete or invalid.');
+    throw new Error('Save data contains incomplete or invalid hazard state.');
   }
 
   const hasHazardState = presentHazardFields === hazardFields.length;
@@ -1473,10 +1502,34 @@ function migrateBuildingPlacements(
     if (!Array.isArray(buildingIds)) continue;
     const facilityIds = buildingIds.filter((buildingId) => buildingId !== 'habitat');
     const oldSectorPlacements = oldPlacementsBySector[sectorId];
+    if (preserveExisting && Array.isArray(oldSectorPlacements)) {
+      placements[Number(sectorId)] = oldSectorPlacements.map((placement) => {
+        if (!placement || typeof placement !== 'object' || Array.isArray(placement)) {
+          throw new Error('Save data contains invalid building placements.');
+        }
+        const rawPlacement = placement as Record<string, unknown>;
+        if (
+          typeof rawPlacement.buildingId !== 'string' ||
+          !BUILDINGS.some((building) => building.id === rawPlacement.buildingId) ||
+          typeof rawPlacement.x !== 'number' ||
+          typeof rawPlacement.y !== 'number'
+        ) {
+          throw new Error('Save data contains invalid building placements.');
+        }
+        return {
+          buildingId: rawPlacement.buildingId as BuildingId,
+          x: rawPlacement.x,
+          y: rawPlacement.y,
+        };
+      });
+      continue;
+    }
     if (
       preserveExisting &&
       oldSectorPlacements !== undefined &&
-      (!oldSectorPlacements || typeof oldSectorPlacements !== 'object' || Array.isArray(oldSectorPlacements))
+      (!oldSectorPlacements ||
+        typeof oldSectorPlacements !== 'object' ||
+        Array.isArray(oldSectorPlacements))
     ) {
       throw new Error('Save data contains invalid building placements.');
     }

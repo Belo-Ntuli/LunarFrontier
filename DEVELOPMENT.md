@@ -21,7 +21,7 @@ npm test
 npm run build
 ```
 
-The test suite covers colony initialization, facility construction and placement, daily resource rules, survival failure, sector unlocking, daily fieldwork, randomized hazards, repairs, and save validation/migration. The production build runs TypeScript checks before bundling.
+The test suite covers colony initialization, facility construction and placement, daily resource rules and sector production modifiers, survival failure, sector unlocking, daily fieldwork, randomized hazards, repairs, and save validation/migration. The production build runs TypeScript checks before bundling.
 
 ## Project layout
 
