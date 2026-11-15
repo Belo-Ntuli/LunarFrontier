@@ -130,6 +130,7 @@ Names are reproduced as supplied. Do not merge similarly named areas (for exampl
 - Show one distinct pixel-art crew character for every person in the colony. Characters wander between built structures and nearby field sites in the active sector; their movement stops while the simulation is paused or the mission has ended, and respects reduced-motion preferences.
 - The surface map shows constructed facilities and interactive fieldwork locations. Players can perform one field operation each lunar day from their current sector.
 - Facility construction starts a placement mode; players choose an open position on the surface map before costs are paid. Existing structures, the habitat/expedition site, and fieldwork locations cannot be overlapped. Arrow keys move the placement preview, Enter places it, and Escape cancels.
+- After placement confirmation, the nearest crew member walks to the chosen site and visibly constructs the facility. Distance adds travel time; the crew must work at the site for at least 3.5 seconds before the building appears and its costs are paid. Pausing stops construction. With reduced motion enabled, the worker remains still and construction completes after the 3.5-second work period. Reloading before completion cancels this uncommitted placement without spending resources.
 - Facility locations persist in the colony save and remain attached to their sector when players zoom or reload.
 - Facility types can be built multiple times in each unlocked sector. Every instance has its own location and independently contributes its daily production and operating use. Facilities do not require a separate habitat to be present in that sector.
 - The first colony-wide Crew homes, Solar panels, Soil farm, and Ice drill placements are free; later instances use the normal listed costs. Show a one-time tutorial the first time a sector is opened in an unseen save, and remember when it is dismissed.
@@ -139,6 +140,7 @@ Names are reproduced as supplied. Do not merge similarly named areas (for exampl
 ### 6.1 Facilities
 
 The first colony-wide placement of Crew homes, Solar panels, Soil farm, and Ice drill is free. Further placements use the listed construction costs. Production and operating consumption apply for every instance on each day transition. Players may build any facility type multiple times in a sector when they can afford it and find clear map space.
+Construction costs are spent once when the crew finishes construction; an in-progress placement does not spend resources. Production and operating consumption apply on each day transition. Facilities are unique per sector.
 
 | Facility | Metal | Lunar regolith | Daily output | Daily operating use |
 |---|---:|---:|---|---|
@@ -365,3 +367,7 @@ The initial implementation is ready for review when all of the following are tru
 35. Once a landing sector is chosen, unlocked or landed sectors have a green highlight and green home symbol on the globe, and locked sectors have a black lock symbol. Neither status symbol appears before landing is chosen.
 
 The economy, day length, exploration costs, and hazard frequencies are initial balancing values and should be adjusted only with corresponding UI, tests, and documentation updates.
+21. The active sector map shows one distinct pixel-art character per crew member; characters wander among buildings and nearby sites, stop when paused or the mission ends, and remain still for reduced-motion preferences.
+22. After placement confirmation, a crew member walks to the marked site and works visibly for at least 3.5 seconds before the facility appears and costs are charged; longer travel distances add time, and pausing suspends the work.
+
+The economy, day length, and exploration costs are implemented as the initial values in this specification and should be adjusted only with corresponding UI, tests, and documentation updates.
