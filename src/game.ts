@@ -559,7 +559,7 @@ const FACILITY_MAINTENANCE_COSTS: Partial<
   'hydroponic-farm': { water: 3, metal: 1 },
 };
 
-const SOLAR_BUILDINGS: BuildingId[] = ['solar-array', 'solar-panels'];
+const SOLAR_BUILDINGS: BuildingId[] = ['solar-panels'];
 
 function nextRandom(seed: number): { value: number; seed: number } {
   let next = seed >>> 0;
@@ -674,46 +674,6 @@ export function getSector(id: number): Sector {
   const sector = SECTORS.find((item) => item.id === id);
   if (!sector) throw new Error(`Unknown sector id: ${id}`);
   return sector;
-}
-
-export function getDailyResourceFlows(
-  colony: ColonySave,
-): { production: Resources; consumption: Resources } {
-  const production: Resources = {
-    water: 0,
-    food: 0,
-    energy: 0,
-    oxygen: 0,
-    metal: 0,
-    regolith: 0,
-  };
-  const consumption: Resources = {
-    water: colony.people,
-    food: colony.people,
-    energy: Math.ceil(colony.people / 2),
-    oxygen: colony.people,
-    metal: 0,
-    regolith: 0,
-  };
-
-  Object.entries(colony.buildings).forEach(([sectorId, buildingIds]) => {
-    const modifiers = getSector(Number(sectorId)).productionModifiers;
-    buildingIds.forEach((buildingId) => {
-      const building = getBuilding(buildingId);
-      RESOURCE_ORDER.forEach((resource) => {
-        const baseProduction = building.production[resource] ?? 0;
-        const modifier = modifiers[resource] ?? 0;
-        production[resource] += baseProduction * (1 + modifier / 100);
-        consumption[resource] += building.consumption[resource] ?? 0;
-      });
-    });
-  });
-
-  RESOURCE_ORDER.forEach((resource) => {
-    production[resource] = roundResourceAmount(production[resource]);
-  });
-
-  return { production, consumption };
 }
 
 function roundResourceAmount(amount: number): number {
@@ -933,7 +893,9 @@ export function getDailyResourceRates(colony: ColonySave): Resources {
       if (hasBuildingIssue(colony.hazardEvents, sectorId, buildingId)) continue;
       const building = getBuilding(buildingId);
       for (const resource of RESOURCE_ORDER) {
-        let production = building.production[resource] ?? 0;
+        const modifier = getSector(sectorId).productionModifiers[resource] ?? 0;
+        let production =
+          (building.production[resource] ?? 0) * (1 + modifier / 100);
         if (
           dustStormActive &&
           resource === 'energy' &&
@@ -945,6 +907,9 @@ export function getDailyResourceRates(colony: ColonySave): Resources {
       }
     }
   }
+  RESOURCE_ORDER.forEach((resource) => {
+    rates[resource] = roundResourceAmount(rates[resource]);
+  });
   return rates;
 }
 
@@ -993,17 +958,12 @@ export function advanceDay(colony: ColonySave): ColonySave {
   if (colony.paused || colony.failed) return colony;
 
   const rates = getDailyResourceRates(colony);
-export function advanceDay(colony: ColonySave): ColonySave {
-  if (colony.paused || colony.failed) return colony;
-
-  const { production, consumption } = getDailyResourceFlows(colony);
 
   const resources = { ...colony.resources };
   for (const resource of RESOURCE_ORDER) {
-    resources[resource] = Math.max(0, resources[resource] + rates[resource]);
     resources[resource] = Math.max(
       0,
-      roundResourceAmount(resources[resource] + production[resource] - consumption[resource]),
+      roundResourceAmount(resources[resource] + rates[resource]),
     );
   }
 
@@ -1162,62 +1122,47 @@ export function validateSave(value: unknown): ColonySave {
     throw new Error('Save data is not an object.');
   }
   const rawSave = removeDiscontinuedFacilities(value) as Partial<ColonySave> & { version?: number };
+  const sourceVersion = rawSave.version;
   if (
-    rawSave.version !== 1 &&
-    rawSave.version !== 2 &&
-    rawSave.version !== 3 &&
-    rawSave.version !== 4 &&
-    rawSave.version !== 5 &&
-    rawSave.version !== SAVE_VERSION
+    sourceVersion !== 1 &&
+    sourceVersion !== 2 &&
+    sourceVersion !== 3 &&
+    sourceVersion !== 4 &&
+    sourceVersion !== 5 &&
+    sourceVersion !== SAVE_VERSION
   ) {
-  const rawSave = value as Partial<ColonySave> & { version?: number };
-  if (
-    rawSave.version !== 1 &&
-    rawSave.version !== 2 &&
-    rawSave.version !== 3 &&
-    rawSave.version !== SAVE_VERSION
-  ) {
-    throw new Error(`Unsupported save version: ${String(rawSave.version)}.`);
+    throw new Error(`Unsupported save version: ${String(sourceVersion)}.`);
   }
   const save: Partial<ColonySave> =
-    rawSave.version === SAVE_VERSION
+    sourceVersion === SAVE_VERSION
       ? rawSave
-      : rawSave.version === 5
-        ? { ...rawSave, version: SAVE_VERSION }
-      : rawSave.version === 4
-        ? { ...rawSave, version: SAVE_VERSION, starterTutorialSeen: false }
-        : {
-            ...rawSave,
-            version: SAVE_VERSION,
-            lastFieldworkDay: rawSave.version === 1 ? 0 : rawSave.lastFieldworkDay,
-            buildingPlacements: migrateBuildingPlacements(
-              rawSave.buildings,
-              rawSave.buildingPlacements,
-              rawSave.version === 3,
-            ),
-            starterTutorialSeen: false,
-          };
-  const sourceVersion = rawSave.version;
-  const save: Partial<ColonySave> = sourceVersion === SAVE_VERSION
-    ? rawSave
-    : {
-        ...rawSave,
-        version: SAVE_VERSION,
-        lastFieldworkDay: sourceVersion === 1 ? 0 : rawSave.lastFieldworkDay,
-        buildingPlacements:
-          sourceVersion === 1 || sourceVersion === 2
-            ? migrateBuildingPlacements(rawSave.buildings)
-            : rawSave.buildingPlacements,
-        hazardEvents: [],
-        hazardProgress: 0,
-        hazardInterval:
-          HAZARD_INTERVAL_MIN + (((rawSave.startingSector ?? 0) % 6) + 6) % 6,
-        randomSeed:
-          (((rawSave.startingSector ?? 0) + 1) * 0x9e37_79b1 +
-            (rawSave.day ?? 1)) >>>
-          0 || 1,
-        nextHazardId: 1,
-      };
+      : {
+          ...rawSave,
+          version: SAVE_VERSION,
+          lastFieldworkDay:
+            sourceVersion === 1 ? 0 : rawSave.lastFieldworkDay,
+          buildingPlacements:
+            sourceVersion === 1 || sourceVersion === 2
+              ? migrateBuildingPlacements(rawSave.buildings)
+              : sourceVersion === 3
+                ? migrateBuildingPlacements(
+                    rawSave.buildings,
+                    rawSave.buildingPlacements,
+                    true,
+                  )
+                : rawSave.buildingPlacements,
+          starterTutorialSeen:
+            sourceVersion < 5 ? false : rawSave.starterTutorialSeen,
+          hazardEvents: [],
+          hazardProgress: 0,
+          hazardInterval:
+            HAZARD_INTERVAL_MIN + (((rawSave.startingSector ?? 0) % 6) + 6) % 6,
+          randomSeed:
+            (((rawSave.startingSector ?? 0) + 1) * 0x9e37_79b1 +
+              (rawSave.day ?? 1)) >>>
+            0 || 1,
+          nextHazardId: 1,
+        };
   if (save.version !== SAVE_VERSION) {
     throw new Error(`Unsupported save version: ${String(save.version)}.`);
   }
@@ -1445,10 +1390,34 @@ function migrateBuildingPlacements(
     if (!Array.isArray(buildingIds)) continue;
     const facilityIds = buildingIds.filter((buildingId) => buildingId !== 'habitat');
     const oldSectorPlacements = oldPlacementsBySector[sectorId];
+    if (preserveExisting && Array.isArray(oldSectorPlacements)) {
+      placements[Number(sectorId)] = oldSectorPlacements.map((placement) => {
+        if (!placement || typeof placement !== 'object' || Array.isArray(placement)) {
+          throw new Error('Save data contains invalid building placements.');
+        }
+        const rawPlacement = placement as Record<string, unknown>;
+        if (
+          typeof rawPlacement.buildingId !== 'string' ||
+          !BUILDINGS.some((building) => building.id === rawPlacement.buildingId) ||
+          typeof rawPlacement.x !== 'number' ||
+          typeof rawPlacement.y !== 'number'
+        ) {
+          throw new Error('Save data contains invalid building placements.');
+        }
+        return {
+          buildingId: rawPlacement.buildingId as BuildingId,
+          x: rawPlacement.x,
+          y: rawPlacement.y,
+        };
+      });
+      continue;
+    }
     if (
       preserveExisting &&
       oldSectorPlacements !== undefined &&
-      (!oldSectorPlacements || typeof oldSectorPlacements !== 'object' || Array.isArray(oldSectorPlacements))
+      (!oldSectorPlacements ||
+        typeof oldSectorPlacements !== 'object' ||
+        Array.isArray(oldSectorPlacements))
     ) {
       throw new Error('Save data contains invalid building placements.');
     }

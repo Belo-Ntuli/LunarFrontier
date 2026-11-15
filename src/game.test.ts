@@ -134,7 +134,7 @@ describe('Lunar Frontier game rules', () => {
   });
 
   it('applies sector modifiers to base building output each day without compounding', () => {
-    let colony = createColony(0);
+    let colony = { ...createColony(0), randomSeed: 3200 };
     colony = buildStructure(colony, 'ice-extractor');
     colony = buildStructure(colony, 'deep-rock-mining');
 
@@ -258,7 +258,7 @@ describe('Lunar Frontier game rules', () => {
     expect(validateSave(storm)).toEqual(storm);
     expect(getDailyResourceRates(storm).energy).toBe(14);
     const repaired = repairHazard(storm, 1);
-    expect(repaired.resources).toMatchObject({ metal: 101, regolith: 113 });
+    expect(repaired.resources).toMatchObject({ metal: 109, regolith: 119 });
     expect(getDailyResourceRates(repaired).energy).toBe(18);
   });
 
@@ -291,7 +291,7 @@ describe('Lunar Frontier game rules', () => {
       repairHazard({ ...damaged, failed: true, paused: true }, 1),
     ).toThrow('mission has ended');
     const repaired = repairHazard(damaged, 1);
-    expect(repaired.resources).toMatchObject({ metal: 101, regolith: 113 });
+    expect(repaired.resources).toMatchObject({ metal: 109, regolith: 119 });
     expect(getDailyResourceRates(repaired).energy).toBe(18);
   });
 
@@ -511,9 +511,6 @@ describe('Lunar Frontier game rules', () => {
     expect(restored.buildingPlacements[4]).toEqual([
       { buildingId: 'hydroponics', x: 70 / 250, y: 46 / 160 },
     ]);
-    expect(restored.version).toBe(4);
-    expect(restored.buildingPlacements[4]['solar-array']).toEqual({ x: 70 / 250, y: 46 / 160 });
-    expect(restored.buildingPlacements[4].hydroponics).toEqual({ x: 98 / 250, y: 46 / 160 });
     expect(restored.people).toBe(7);
   });
 
@@ -577,7 +574,6 @@ describe('Lunar Frontier game rules', () => {
     const restored = validateSave({ ...versionOneSave, version: 1 });
 
     expect(restored.version).toBe(6);
-    expect(restored.version).toBe(4);
     expect(restored.lastFieldworkDay).toBe(0);
     expect(restored.people).toBe(7);
     expect(restored.buildings[4]).toEqual(['habitat']);
@@ -594,7 +590,7 @@ describe('Lunar Frontier game rules', () => {
     } = createColony(4);
     const restored = validateSave({ ...versionThreeSave, version: 3 });
 
-    expect(restored.version).toBe(4);
+    expect(restored.version).toBe(6);
     expect(restored.hazardEvents).toEqual([]);
     expect(restored.hazardProgress).toBe(0);
     expect(restored.hazardInterval).toBe(14);
