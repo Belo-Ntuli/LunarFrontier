@@ -182,6 +182,32 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 .resource-name { grid-column: 2; grid-row: 2; color: #8490a2; font-size: 9px; white-space: nowrap; }
 .resource-rate { display: none; }
 .resource-low .resource-value { color: #ff9a87; }
+.hazard-board {
+  width: min(1500px, calc(100% - 32px));
+  margin: 8px auto 0;
+  padding: 8px 12px;
+  display: grid;
+  grid-template-columns: 145px minmax(0, 1fr);
+  gap: 12px;
+  border: 1px solid rgba(167, 190, 218, 0.13);
+  background: #111827;
+}
+.hazard-board.has-hazards { border-color: rgba(240, 160, 111, 0.4); }
+.hazard-board-heading { display: grid; align-content: center; gap: 5px; color: #e0b588; font: 9px var(--mono); letter-spacing: .08em; }
+.hazard-board-heading span { color: #8390a3; font-size: 8px; }
+.hazard-board-content { min-width: 0; display: grid; gap: 6px; }
+.hazard-watch-copy, .hazard-future-note { margin: 0; color: #a4afbd; font-size: 9px; line-height: 1.5; }
+.hazard-future-note { color: #748196; font-size: 8px; }
+.hazard-card { min-width: 0; padding: 7px 9px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid rgba(240, 160, 111, .2); background: rgba(47, 35, 33, .72); }
+.hazard-card-copy { min-width: 0; display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 3px 8px; }
+.hazard-card-copy strong { color: #f0c49f; font: 10px var(--display); }
+.hazard-card-copy strong small { margin-right: 4px; color: #a7b3c2; font: 7px var(--mono); letter-spacing: .07em; }
+.hazard-card-copy > span { color: #8490a2; font: 8px var(--mono); }
+.hazard-card-copy p { grid-column: 1 / -1; margin: 0; color: #b0bac7; font-size: 9px; }
+.hazard-card-copy small { grid-column: 1 / -1; color: #d7bc91; font: 8px var(--mono); }
+.hazard-repair { flex: 0 0 auto; min-height: 28px; padding: 0 9px; border: 1px solid rgba(240, 200, 121, .35); color: #f2d594; background: rgba(240, 200, 121, .08); font: 8px var(--mono); cursor: pointer; }
+.hazard-repair:hover:not(:disabled) { background: rgba(240, 200, 121, .16); }
+.hazard-repair:disabled { opacity: .56; cursor: not-allowed; }
 .live-dot {
   width: 6px;
   height: 6px;
@@ -662,6 +688,20 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 .map-survey-line { fill: none; stroke: rgba(232,244,238,.36); stroke-width: 2; stroke-dasharray: 7 11; }
 .map-resource-site circle { fill: #34474e; stroke: #f0bf74; stroke-width: 2; }
 .map-resource-site path { fill: none; stroke: #ffd18a; stroke-width: 2.5; }
+.building-warning-sign { filter: drop-shadow(0 1px 3px rgba(0,0,0,.8)); }
+.building-warning-triangle { fill: #f0bf74; stroke: #3c301e; stroke-width: 2.5; stroke-linejoin: round; }
+.building-warning-mark { fill: none; stroke: #3c301e; stroke-width: 2.5; stroke-linecap: round; }
+.building-warning-dot { fill: #3c301e; }
+.meteorite-impact-site { filter: drop-shadow(0 2px 2px rgba(0,0,0,.72)); }
+.impact-scatter { fill: rgba(46,39,33,.52); }
+.impact-rim { fill: #685442; stroke: #b39370; stroke-width: 2.5; }
+.impact-basin { fill: #292c2b; stroke: #443d35; stroke-width: 2; }
+.impact-debris { fill: #9c7956; stroke: #d0ad82; stroke-width: 1.5; }
+.meteorite-fragment { fill: #393a37; stroke: #d4a36a; stroke-width: 1.5; }
+.dust-storm-effect { position: absolute; z-index: 2; inset: 0; overflow: hidden; background: linear-gradient(110deg, transparent 7%, rgba(196,158,105,.14) 35%, rgba(223,190,143,.2) 53%, transparent 82%); mix-blend-mode: screen; pointer-events: none; }
+.dust-storm-effect::before, .dust-storm-effect::after { content: ''; position: absolute; inset: -35% -25%; background: repeating-linear-gradient(169deg, transparent 0 28px, rgba(220,190,148,.24) 29px 32px, transparent 33px 61px); animation: dust-storm-drift 5s ease-in-out infinite alternate; }
+.dust-storm-effect::after { opacity: .55; transform: translateY(13%); animation-delay: -2.5s; }
+@keyframes dust-storm-drift { from { transform: translate(-5%, 2%); } to { transform: translate(6%, -2%); } }
 .map-resource-site text { font-size: 9px; }
 .ice-resource-site circle { stroke: #a9e3ed; }
 .ice-resource-site path { stroke: #c3f1f3; }
@@ -804,6 +844,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
   .day-badge strong, .crew-badge strong { font-size: 11px; }
   .pause-button { min-width: 70px; height: 33px; gap: 6px; font-size: 8px; }
   .resource-bar { min-height: 55px; padding: 5px 10px; justify-content: space-around; gap: 4px; overflow-x: auto; }
+  .hazard-board { width: calc(100% - 24px); margin-top: 7px; padding: 8px; grid-template-columns: 1fr; gap: 6px; }
+  .hazard-board-heading { display: flex; justify-content: space-between; }
+  .hazard-card { align-items: flex-start; }
+  .hazard-repair { max-width: 105px; white-space: normal; }
   .resource-chip { min-width: auto; grid-template-columns: 14px auto; column-gap: 2px; }
   .resource-glyph { font-size: 13px; }
   .resource-value { font-size: 11px; }

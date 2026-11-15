@@ -2,7 +2,7 @@
 
 **Status:** Initial playable MVP
 **Audience:** Product, design, engineering, art, and education
-**Implementation status:** The browser MVP implements the 3D lunar atlas, starting colony, 2D sector management, resource simulation, facility construction, exploration, pausing, and local saves. Product and economy values are initial balancing defaults.
+**Implementation status:** The browser MVP implements the 3D lunar atlas, starting colony, 2D sector management, resource simulation, facility construction, exploration, pausing, local saves, and repairable environment and maintenance hazards. Product and economy values are initial balancing defaults.
 
 ## 1. Game concept
 
@@ -167,6 +167,35 @@ Fieldwork is an immediate, crew-led action on the 2D sector map. The colony may 
 
 Ice-core operations are available in South Pole, Southern polar field, North Pole, Northern ice fields, Northern poles, and Deep shadowed crater. The operation represents a simplified survey/sample return, not a real mission yield estimate. If the crew lacks the energy for an operation, the map disables it and identifies the energy constraint. Pausing or ending the mission also disables fieldwork.
 
+### 6.3 Environment and maintenance hazards
+
+Hazards are generated at day transitions, persist in the local save, and are shown in the shared hazard board on both the atlas and sector screens. Repairs spend the displayed resources immediately and are unavailable while paused or after mission failure. An unrepaired building is offline: it provides no production or operating consumption from the next daily resource calculation. Resource shortages continue to use the normal mission-failure rules.
+
+Environmental hazards:
+
+- The first environmental event is scheduled after a random 10–15 sector-days. Each unlocked sector adds one sector-day of hazard pressure per lunar day, shortening the interval linearly; no more than one environmental event may be active at a time.
+- **Meteorite impact:** damages one intact structure, taking it offline until repaired for 2 Metal and 4 Lunar regolith.
+- **Dust storm:** reduces output from all Solar arrays and Solar panels to 50% until the panels are cleaned for 1 Metal and 1 Lunar regolith.
+- A warning sign appears over any building with an active targeted maintenance or meteorite-damage event and disappears when that event is repaired.
+- An active meteorite impact is shown as a crater and debris beside its damaged structure; an active dust storm appears as drifting dust over the sector surface map.
+- **Solar flare:** intentionally has no active event behavior yet. The future handler is reserved for NASA DONKI solar-flare data ([NASA APIs](https://api.nasa.gov/) and [CCMC DONKI](https://ccmc.gsfc.nasa.gov/tools/DONKI/)); the current game makes no NASA API requests and does not model radiation treatment. Future health effects may consult [NASA's Open Science Data Repository](https://osdr.nasa.gov/bio/repo/search?q=radiation%20on%20moon&data_source=cgene,alsda,esa&data_type=study), but are not simulated yet.
+
+Maintenance hazards:
+
+- Each built, currently operational structure has a 20% daily maintenance chance per unlocked sector, capped at 100%. A structure can have only one active maintenance or damage event at a time; separate structures can accumulate issues.
+- **Solar panel maintenance:** Solar arrays or Solar panels become unavailable until repaired for 1 Metal and 1 Lunar regolith.
+- **Structural decay:** the affected structure becomes unavailable until repaired for 2 Metal and 2 Lunar regolith.
+- Facility maintenance can occur on these structures:
+
+  | Facility | Repair cost |
+  |---|---|
+  | Nuclear power | 2 Metal, 3 Lunar regolith |
+  | Oxygen plant | 2 Metal |
+  | Soil farm | 2 Water |
+  | Hydroponic farm | 1 Metal, 3 Water |
+
+Maintenance hazards can stack with each other and with an environmental hazard. A repaired environmental hazard allows a later environmental event to occur; a second one never overlaps it. Hazard scheduling uses a saved random seed so that reloads do not reset event state. These frequencies and outcomes are initial game-balancing values, not forecasts or engineering claims.
+
 ## 7. People and resources
 
 ### 7.1 People
@@ -227,6 +256,7 @@ There is no inventory capacity limit in the current playable version. The starti
 - While paused, players can still inspect the interface, review sector information, and save or load progress. Actions that advance or consume in-game time must not progress the simulation until unpaused.
 - The page does not accrue elapsed play time while hidden.
 - At each day transition, calculate facility output and operating use together with crew needs. If Water, Food, Oxygen, or Energy would fall below zero, the mission ends, pauses, and reports which need could not be met.
+- Hazard rolls and their daily simulation effects run only on unpaused day transitions. Repairing a hazard is an immediate resource-consuming action and is disabled while paused.
 
 ## 10. Persistence and save behavior
 
@@ -235,6 +265,7 @@ There is no inventory capacity limit in the current playable version. The starti
 - Persist after colony creation, building, unlocking, day transitions, pause changes, and periodically during the day timer.
 - Store the game state in the browser under the versioned `lunar-frontier-save` local-storage key.
 - Include a save schema version so future game updates can identify and migrate prior saves. The current schema is version 6 and migrates existing version-1 through version-5 colonies, preserving colony progress and remaining facility locations.
+- Include a save schema version so future game updates can identify and migrate prior saves. The current schema is version 4 and migrates existing version-1, version-2, and version-3 colonies, preserving their progress, assigning existing facilities default map positions where needed, and initializing hazard state for older saves.
 - Handle unavailable storage, invalid JSON, and incompatible save versions explicitly. Do not silently overwrite a player's unreadable save with a new colony.
 - The game should provide a deliberate new-game/reset action with confirmation before replacing saved progress.
 
@@ -275,6 +306,7 @@ The initial implementation is ready for review when all of the following are tru
 13. Players can perform one field operation per day; mineral prospecting is available in every unlocked sector, while ice-core drilling is limited to sectors marked with ice deposits.
 14. Fieldwork immediately spends the displayed Energy cost, yields the displayed resources, cannot be repeated in the same day, and becomes available again on the next day.
 15. Version-1 through version-5 local saves migrate to the current schema without losing colony progress.
+15. Version-1, version-2, and version-3 local saves migrate to the current schema without losing colony progress.
 16. The 2D sector screen presents the lunar surface map as its dominant play area, with a compact resource rail above it and construction controls beside it; the field guide and day timer are secondary.
 17. Sector gameplay panels use readable opaque surfaces; no backdrop blur obscures the map, resource values, or facility details.
 18. Facility cards explain their colony purpose, construction costs, daily output, and recurring resource use, and the field guide explains a relevant terrain and mission trade-off.
@@ -291,5 +323,10 @@ The initial implementation is ready for review when all of the following are tru
 29. Background stars twinkle independently at a gentle, staggered pace and remain static for users who prefer reduced motion.
 30. Each visible sector on the 3D globe has a raised bubble showing its two-digit number and larger name, without a "Sector" prefix, connected to the sector by a line and surface dot; labels follow globe rotation and do not prevent sector selection.
 31. From 901px and wider, the atlas keeps the mission map, globe, and sector details in three columns, with compact sidebars around 160–205px wide and controls contained within them; narrower layouts can stack sector details beneath the map and globe.
+21. Environment events occur after randomized 10–15 sector-day intervals, accelerated linearly by unlocked sectors; a meteorite damages infrastructure and a dust storm reduces solar output to 50%. No two environment events overlap.
+22. Each built structure has a 20% daily maintenance chance per unlocked sector, capped at 100%; separate structures can accumulate issues, and the specified repairs spend the correct resources and restore their facilities.
+23. A damaged or maintained structure is excluded from daily production and operating use until repaired; the hazard board shows active issues and repair costs on both screens.
+24. Solar-flare generation remains an empty placeholder for future NASA DONKI integration; no NASA request or radiation-treatment behavior is active in this version.
+25. Version-1, version-2, and version-3 saves migrate to version 4 without losing colony progress; active version-4 hazards and the hazard schedule survive reloads.
 
-The economy, day length, and exploration costs are implemented as the initial values in this specification and should be adjusted only with corresponding UI, tests, and documentation updates.
+The economy, day length, exploration costs, and hazard frequencies are initial balancing values and should be adjusted only with corresponding UI, tests, and documentation updates.

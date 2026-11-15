@@ -8,8 +8,13 @@ import {
   canUnlock,
   createColony,
   isFirstBuildFree,
+  createSolarFlareHazard,
+  getDailyResourceRates,
+  getHazardCost,
+  getMaintenanceChance,
   isValidBuildingPlacement,
   performFieldwork,
+  repairHazard,
   unlockSector,
   validateSave,
 } from './game';
@@ -191,6 +196,203 @@ describe('Lunar Frontier game rules', () => {
     expect(nextDay.failureReason).toContain('water');
   });
 
+  it('scales maintenance risk linearly with unlocked sectors and caps it at certainty', () => {
+    expect(getMaintenanceChance(1)).toBe(0.2);
+    expect(getMaintenanceChance(3)).toBeCloseTo(0.6);
+    expect(getMaintenanceChance(5)).toBe(1);
+    expect(getMaintenanceChance(15)).toBe(1);
+  });
+
+  it('keeps solar-flare hazard generation disabled for the future DONKI integration', () => {
+    expect(createSolarFlareHazard()).toBeNull();
+  });
+
+  it('reduces solar output during dust storms and restores it when repaired', () => {
+    const built = buildStructure(createColony(4), 'solar-panels');
+    const storm = {
+      ...built,
+      hazardEvents: [
+        { id: 1, kind: 'dust-storm' as const, day: 1, sectorId: null, buildingId: null },
+      ],
+      nextHazardId: 2,
+    };
+
+    expect(validateSave(storm)).toEqual(storm);
+    expect(getDailyResourceRates(storm).energy).toBe(14);
+    const repaired = repairHazard(storm, 1);
+    expect(repaired.resources).toMatchObject({ metal: 101, regolith: 113 });
+    expect(getDailyResourceRates(repaired).energy).toBe(18);
+  });
+
+  it('takes a damaged facility offline until its maintenance cost is paid', () => {
+    const built = buildStructure(createColony(4), 'solar-panels');
+    const damaged = {
+      ...built,
+      hazardEvents: [
+        {
+          id: 1,
+          kind: 'solar-panel-maintenance' as const,
+          day: 1,
+          sectorId: 4,
+          buildingId: 'solar-panels' as const,
+        },
+      ],
+      nextHazardId: 2,
+    };
+
+    expect(getDailyResourceRates(damaged).energy).toBe(10);
+    expect(getHazardCost(damaged.hazardEvents[0])).toEqual({ metal: 1, regolith: 1 });
+    expect(() => repairHazard({ ...damaged, paused: true }, 1)).toThrow('Resume the simulation');
+    expect(() =>
+      repairHazard(
+        { ...damaged, resources: { ...damaged.resources, metal: 0 } },
+        1,
+      ),
+    ).toThrow('Not enough metal');
+    expect(() =>
+      repairHazard({ ...damaged, failed: true, paused: true }, 1),
+    ).toThrow('mission has ended');
+    const repaired = repairHazard(damaged, 1);
+    expect(repaired.resources).toMatchObject({ metal: 101, regolith: 113 });
+    expect(getDailyResourceRates(repaired).energy).toBe(18);
+  });
+
+  it('uses the supplied meteorite, structural, and facility repair costs', () => {
+    expect(
+      getHazardCost({
+        id: 1,
+        kind: 'meteorite-impact',
+        day: 1,
+        sectorId: 4,
+        buildingId: 'habitat',
+      }),
+    ).toEqual({ metal: 2, regolith: 4 });
+    expect(
+      getHazardCost({
+        id: 2,
+        kind: 'structural-decay',
+        day: 1,
+        sectorId: 4,
+        buildingId: 'habitat',
+      }),
+    ).toEqual({ metal: 2, regolith: 2 });
+    expect(
+      getHazardCost({
+        id: 3,
+        kind: 'facility-maintenance',
+        day: 1,
+        sectorId: 4,
+        buildingId: 'nuclear-power',
+      }),
+    ).toEqual({ metal: 2, regolith: 3 });
+    expect(
+      getHazardCost({
+        id: 4,
+        kind: 'facility-maintenance',
+        day: 1,
+        sectorId: 4,
+        buildingId: 'oxygen-plant',
+      }),
+    ).toEqual({ metal: 2 });
+    expect(
+      getHazardCost({
+        id: 5,
+        kind: 'facility-maintenance',
+        day: 1,
+        sectorId: 4,
+        buildingId: 'soil-farm',
+      }),
+    ).toEqual({ water: 2 });
+    expect(
+      getHazardCost({
+        id: 6,
+        kind: 'facility-maintenance',
+        day: 1,
+        sectorId: 4,
+        buildingId: 'hydroponic-farm',
+      }),
+    ).toEqual({ water: 3, metal: 1 });
+  });
+
+  it('generates one environmental hazard on its randomized sector-day interval', () => {
+    const colony = {
+      ...createColony(4),
+      hazardInterval: 10,
+      hazardProgress: 9,
+      randomSeed: 1,
+    };
+
+    const nextDay = advanceDay(colony);
+    const environmentalEvents = nextDay.hazardEvents.filter(
+      (event) => event.kind === 'meteorite-impact' || event.kind === 'dust-storm',
+    );
+
+    expect(environmentalEvents).toHaveLength(1);
+    expect(environmentalEvents[0].day).toBe(2);
+    expect(nextDay.hazardProgress).toBe(0);
+    expect(nextDay.hazardInterval).toBeGreaterThanOrEqual(10);
+    expect(nextDay.hazardInterval).toBeLessThanOrEqual(15);
+  });
+
+  it('accelerates the environmental hazard interval as sectors unlock', () => {
+    const colony = {
+      ...createColony(4),
+      unlockedSectors: [4, 0],
+      hazardInterval: 10,
+      hazardProgress: 8,
+      randomSeed: 1,
+    };
+
+    const nextDay = advanceDay(colony);
+    expect(
+      nextDay.hazardEvents.some(
+        (event) => event.kind === 'meteorite-impact' || event.kind === 'dust-storm',
+      ),
+    ).toBe(true);
+    expect(nextDay.hazardProgress).toBe(0);
+  });
+
+  it('allows maintenance incidents to stack across built structures', () => {
+    let colony = buildStructure(createColony(4), 'solar-panels');
+    colony = {
+      ...colony,
+      unlockedSectors: [4, 0, 1, 2, 3],
+      hazardInterval: 15,
+    };
+
+    const nextDay = advanceDay(colony);
+    const maintenanceEvents = nextDay.hazardEvents.filter(
+      (event) =>
+        event.kind === 'solar-panel-maintenance' ||
+        event.kind === 'structural-decay' ||
+        event.kind === 'facility-maintenance',
+    );
+
+    expect(maintenanceEvents).toHaveLength(2);
+    expect(new Set(maintenanceEvents.map((event) => event.buildingId)).size).toBe(2);
+  });
+
+  it('does not overlap natural disasters while one remains active', () => {
+    const colony = {
+      ...buildStructure(createColony(4), 'solar-panels'),
+      hazardEvents: [
+        { id: 1, kind: 'dust-storm' as const, day: 1, sectorId: null, buildingId: null },
+      ],
+      hazardProgress: 9,
+      hazardInterval: 10,
+      nextHazardId: 2,
+      randomSeed: 1,
+    };
+
+    const nextDay = advanceDay(colony);
+    expect(
+      nextDay.hazardEvents.filter(
+        (event) => event.kind === 'meteorite-impact' || event.kind === 'dust-storm',
+      ),
+    ).toHaveLength(1);
+    expect(nextDay.hazardProgress).toBe(9);
+  });
+
   it('does not advance while paused', () => {
     const colony = { ...createColony(4), paused: true };
 
@@ -271,6 +473,9 @@ describe('Lunar Frontier game rules', () => {
     expect(restored.buildingPlacements[4]).toEqual([
       { buildingId: 'hydroponics', x: 70 / 250, y: 46 / 160 },
     ]);
+    expect(restored.version).toBe(4);
+    expect(restored.buildingPlacements[4]['solar-array']).toEqual({ x: 70 / 250, y: 46 / 160 });
+    expect(restored.buildingPlacements[4].hydroponics).toEqual({ x: 98 / 250, y: 46 / 160 });
     expect(restored.people).toBe(7);
   });
 
@@ -334,8 +539,65 @@ describe('Lunar Frontier game rules', () => {
     const restored = validateSave({ ...versionOneSave, version: 1 });
 
     expect(restored.version).toBe(6);
+    expect(restored.version).toBe(4);
     expect(restored.lastFieldworkDay).toBe(0);
     expect(restored.people).toBe(7);
     expect(restored.buildings[4]).toEqual(['habitat']);
+  });
+
+  it('migrates version-three colonies to persistent hazard state', () => {
+    const {
+      hazardEvents: _hazardEvents,
+      hazardProgress: _hazardProgress,
+      hazardInterval: _hazardInterval,
+      randomSeed: _randomSeed,
+      nextHazardId: _nextHazardId,
+      ...versionThreeSave
+    } = createColony(4);
+    const restored = validateSave({ ...versionThreeSave, version: 3 });
+
+    expect(restored.version).toBe(4);
+    expect(restored.hazardEvents).toEqual([]);
+    expect(restored.hazardProgress).toBe(0);
+    expect(restored.hazardInterval).toBe(14);
+    expect(restored.nextHazardId).toBe(1);
+  });
+
+  it('preserves active hazards through save validation', () => {
+    const built = buildStructure(createColony(4), 'solar-panels');
+    const colony = {
+      ...built,
+      hazardEvents: [
+        {
+          id: 1,
+          kind: 'solar-panel-maintenance' as const,
+          day: 1,
+          sectorId: 4,
+          buildingId: 'solar-panels' as const,
+        },
+      ],
+      nextHazardId: 2,
+    };
+
+    expect(validateSave(colony)).toEqual(colony);
+  });
+
+  it('rejects invalid hazard targets in saved colonies', () => {
+    const colony = createColony(4);
+    expect(() =>
+      validateSave({
+        ...colony,
+        hazardEvents: [
+          {
+            id: 1,
+            kind: 'solar-panel-maintenance',
+            day: 1,
+            sectorId: 4,
+            buildingId: 'solar-panels',
+          },
+        ],
+        nextHazardId: 2,
+      }),
+    ).toThrow('invalid hazard targets');
   });
 });
