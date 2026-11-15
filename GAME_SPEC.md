@@ -117,35 +117,33 @@ Names are reproduced as supplied. Do not merge similarly named areas (for exampl
 - The surface map shows constructed facilities and interactive fieldwork locations. Players can perform one field operation each lunar day from their current sector.
 - Facility construction starts a placement mode; players choose an open position on the surface map before costs are paid. Existing structures, the habitat/expedition site, and fieldwork locations cannot be overlapped. Arrow keys move the placement preview, Enter places it, and Escape cancels.
 - Facility locations persist in the colony save and remain attached to their sector when players zoom or reload.
-- A facility type can be built once per sector. Facilities do not require a separate habitat to be present in that sector.
+- Facility types can be built multiple times in each unlocked sector. Every instance has its own location and independently contributes its daily production and operating use. Facilities do not require a separate habitat to be present in that sector.
+- The first colony-wide Crew homes, Solar panels, Soil farm, and Ice drill placements are free; later instances use the normal listed costs. Show a one-time tutorial the first time a sector is opened in an unseen save, and remember when it is dismissed.
 - Facility production and consumption are colony-wide, and materials are shared between unlocked sectors.
 - Provide a clear route back to the 3D overview without losing the current colony state.
 
 ### 6.1 Facilities
 
-Construction costs are spent immediately. Production and operating consumption apply on each day transition. Facilities are unique per sector.
+The first colony-wide placement of Crew homes, Solar panels, Soil farm, and Ice drill is free. Further placements use the listed construction costs. Production and operating consumption apply for every instance on each day transition. Players may build any facility type multiple times in a sector when they can afford it and find clear map space.
 
 | Facility | Metal | Lunar regolith | Daily output | Daily operating use |
 |---|---:|---:|---|---|
-| Basic habitat (starting sector only) | Included | Included | +1 Water, +2 Food, +14 Energy, +2 Oxygen | None |
-| Living quarters | 20 | 16 | None; provides visible sheltered space only | None |
-| Solar array | 12 | 10 | +12 Energy | None |
-| Hydroponics bay | 18 | 18 | +10 Food | 2 Water, 2 Energy |
-| Ice extractor | 20 | 12 | +10 Water | 3 Energy |
-| Oxygen recycler | 14 | 8 | +10 Oxygen | 2 Energy |
-| Regolith & metal mine | 16 | 14 | +4 Metal, +8 Lunar regolith | 5 Energy |
+| Starter shelter (starting sector only) | Included | Included | +1 Water, +2 Food, +14 Energy, +2 Oxygen | None |
+| Crew homes | 20 | 16 | None; provides visible sheltered space only | None |
+| Indoor farm | 18 | 18 | +10 Food | 2 Water, 2 Energy |
+| Ice drill | 20 | 12 | +10 Water | 3 Energy |
+| Air recycler | 14 | 8 | +10 Oxygen | 2 Energy |
 | Solar panels | 8 | 6 | +8 Energy | None |
 | Nuclear power | 32 | 28 | +24 Energy | None; reactor fuel is not modeled separately |
-| Medical bay | 18 | 14 | Clinic service; health outcomes are not simulated | 1 Energy |
-| Oxygen plant | 22 | 16 | +14 Oxygen | 3 Energy |
-| Water plant | 24 | 20 | +14 Water | 4 Energy |
+| Medical clinic | 18 | 14 | Clinic service; health outcomes are not simulated | 1 Energy |
+| Oxygen maker | 22 | 16 | +14 Oxygen | 3 Energy |
 | Soil farm | 16 | 14 | +5 Food | 1 Water, 1 Energy |
-| Hydroponic farm | 24 | 22 | +14 Food | 4 Water, 3 Energy |
-| Bug protein processor | 22 | 18 | +8 Food | 3 Food, 2 Energy |
-| Regolith collector | 12 | 10 | +10 Lunar regolith | 2 Energy |
-| Deep rock mining | 32 | 26 | +8 Metal, +4 Lunar regolith | 8 Energy |
+| Water-grown farm | 24 | 22 | +14 Food | 4 Water, 3 Energy |
+| Bug food maker | 22 | 18 | +8 Food | 3 Food, 2 Energy |
+| Moon dust collector | 12 | 10 | +10 Lunar regolith | 2 Energy |
+| Deep mine | 32 | 26 | +8 Metal, +4 Lunar regolith | 8 Energy |
 
-The requested Living Quarters option is already represented by the existing Living quarters facility and is not duplicated. New facility rates are balancing choices scaled against crew upkeep (1 Water, Food, and Oxygen per crew member per day, and 1 Energy per two crew members rounded up). The Soil farm uses less water and produces less food than the Hydroponic farm. The Bug protein processor consumes food as feedstock but has a larger food output.
+The requested Living Quarters option is already represented by the existing Crew homes facility and is not duplicated. New facility rates are balancing choices scaled against crew upkeep (1 Water, Food, and Oxygen per crew member per day, and 1 Energy per two crew members rounded up). The Soil farm uses less water and produces less food than the Water-grown farm. The Bug food maker uses food to make a larger amount of food.
 
 ### 6.2 Surface fieldwork
 
@@ -225,7 +223,7 @@ There is no inventory capacity limit in the current playable version. The starti
 - Save at least: selected starting sector, current sector, unlocked sectors, population, resource quantities, day, pause-independent simulation state, and completed/active progression state needed to resume.
 - Persist after colony creation, building, unlocking, day transitions, pause changes, and periodically during the day timer.
 - Store the game state in the browser under the versioned `lunar-frontier-save` local-storage key.
-- Include a save schema version so future game updates can identify and migrate prior saves. The current schema is version 3 and migrates existing version-1 and version-2 colonies, preserving their progress and assigning existing facilities default map positions.
+- Include a save schema version so future game updates can identify and migrate prior saves. The current schema is version 6 and migrates existing version-1 through version-5 colonies, preserving colony progress and remaining facility locations.
 - Handle unavailable storage, invalid JSON, and incompatible save versions explicitly. Do not silently overwrite a player's unreadable save with a new colony.
 - The game should provide a deliberate new-game/reset action with confirmation before replacing saved progress.
 
@@ -265,11 +263,14 @@ The initial implementation is ready for review when all of the following are tru
 12. Invalid, outdated, or unavailable local storage is handled with a clear user-facing message and without silently destroying existing progress.
 13. Players can perform one field operation per day; mineral prospecting is available in every unlocked sector, while ice-core drilling is limited to sectors marked with ice deposits.
 14. Fieldwork immediately spends the displayed Energy cost, yields the displayed resources, cannot be repeated in the same day, and becomes available again on the next day.
-15. Version-1 and version-2 local saves migrate to the current schema without losing colony progress.
+15. Version-1 through version-5 local saves migrate to the current schema without losing colony progress.
 16. The 2D sector screen presents the lunar surface map as its dominant play area, with a compact resource rail above it and construction controls beside it; the field guide and day timer are secondary.
 17. Sector gameplay panels use readable opaque surfaces; no backdrop blur obscures the map, resource values, or facility details.
 18. Facility cards explain their colony purpose, construction costs, daily output, and recurring resource use, and the field guide explains a relevant terrain and mission trade-off.
-19. The starting habitat and living quarters, along with each constructed facility, are visibly represented on the 2D sector surface. Building living quarters costs 20 Metal and 16 Lunar regolith and does not increase population.
+19. The starting shelter and Crew homes, along with each constructed facility, are visibly represented on the 2D sector surface. The first Crew homes placement is free; subsequent placements cost 20 Metal and 16 Lunar regolith and do not increase population.
 20. Players can choose a clear map location for each new facility; blocked locations are rejected, and chosen positions persist after reloading.
+21. Players can build multiple instances of a facility in one sector; each instance has its own location, costs, and daily resource effects.
+22. Opening the first sector in an unseen save shows a dismissible tutorial about the four free first placements; dismissal persists, and each eligible first placement spends no construction materials.
+23. Regolith & metal mine, Solar array, and Water plant are no longer buildable; loading an existing save removes these facilities and their saved locations.
 
 The economy, day length, and exploration costs are implemented as the initial values in this specification and should be adjusted only with corresponding UI, tests, and documentation updates.

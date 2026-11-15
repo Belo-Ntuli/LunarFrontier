@@ -34,4 +34,4 @@ The test suite covers colony initialization, facility construction and placement
 
 ## Save data
 
-The save key is `lunar-frontier-save`; its schema version is `3`. Version-1 and version-2 colonies are migrated automatically, preserving progress and assigning existing facilities default map positions. Use the in-game **Start a new colony** flow to replace an existing mission. Invalid saves are reported instead of being silently overwritten.
+The save key is `lunar-frontier-save`; its schema version is `6`. Version-1 through version-5 colonies are migrated automatically, preserving progress and existing facility locations while removing discontinued facility types. Use the in-game **Start a new colony** flow to replace an existing mission. Invalid saves are reported instead of being silently overwritten.
