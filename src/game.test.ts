@@ -7,6 +7,8 @@ import {
   canPerformFieldwork,
   canUnlock,
   createColony,
+  isFirstBuildFree,
+  isValidBuildingPlacement,
   performFieldwork,
   unlockSector,
   validateSave,
@@ -21,6 +23,7 @@ describe('Lunar Frontier game rules', () => {
     expect(colony.day).toBe(1);
     expect(colony.unlockedSectors).toEqual([4]);
     expect(colony.buildings[4]).toEqual(['habitat']);
+    expect(colony.starterTutorialSeen).toBe(false);
     expect(colony.resources).toEqual({
       water: 70,
       food: 70,
@@ -31,25 +34,134 @@ describe('Lunar Frontier game rules', () => {
     });
   });
 
-  it('charges construction costs and prevents duplicate facilities per sector', () => {
+  it('charges the listed cost for each repeat facility placement', () => {
     const colony = createColony(4);
-    const built = buildStructure(colony, 'ice-extractor');
+    const first = buildStructure(colony, 'medical-bay');
+    const built = buildStructure(first, 'medical-bay');
 
-    expect(built.resources.metal).toBe(90);
-    expect(built.resources.regolith).toBe(108);
-    expect(built.buildings[4]).toContain('ice-extractor');
-    expect(() => buildStructure(built, 'ice-extractor')).toThrow('already built');
-    expect(BUILDINGS.find((building) => building.id === 'ice-extractor')?.metal).toBe(20);
+    expect(built.resources.metal).toBe(74);
+    expect(built.resources.regolith).toBe(92);
+    expect(built.buildings[4].filter((id) => id === 'medical-bay')).toHaveLength(2);
+    expect(built.buildingPlacements[4]).toHaveLength(2);
+    expect(built.buildingPlacements[4][0]).not.toEqual(built.buildingPlacements[4][1]);
+    expect(BUILDINGS.find((building) => building.id === 'medical-bay')?.metal).toBe(18);
   });
 
-  it('builds living quarters without changing the colony population', () => {
+  it('makes the first placement of each starter facility free and charges for repeats', () => {
+    let colony = createColony(4);
+    const starterBuildings = [
+      'living-quarters',
+      'solar-panels',
+      'soil-farm',
+      'ice-extractor',
+    ] as const;
+
+    for (const buildingId of starterBuildings) {
+      expect(isFirstBuildFree(colony, buildingId)).toBe(true);
+      const resourcesBefore = { ...colony.resources };
+      const first = buildStructure(colony, buildingId);
+      expect(first.resources).toEqual(resourcesBefore);
+      expect(isFirstBuildFree(first, buildingId)).toBe(false);
+
+      const definition = BUILDINGS.find((building) => building.id === buildingId)!;
+      const repeat = buildStructure(first, buildingId);
+      expect(repeat.resources.metal).toBe(first.resources.metal - definition.metal);
+      expect(repeat.resources.regolith).toBe(first.resources.regolith - definition.regolith);
+      colony = repeat;
+    }
+
+    expect(isFirstBuildFree(colony, 'nuclear-power')).toBe(false);
+  });
+
+  it('uses the starter-free allowance across the whole colony, not once per sector', () => {
+    const first = buildStructure(createColony(4), 'solar-panels');
+    const outpost = unlockSector(first, 0);
+    const repeated = buildStructure(outpost, 'solar-panels');
+
+    expect(repeated.resources.metal).toBe(outpost.resources.metal - 8);
+    expect(repeated.resources.regolith).toBe(outpost.resources.regolith - 6);
+  });
+
+  it('saves a chosen facility location and rejects blocked or out-of-map spots', () => {
+    const colony = createColony(4);
+    const placement = { x: 0.15, y: 0.8 };
+
+    expect(isValidBuildingPlacement(colony, placement)).toBe(true);
+    const built = buildStructure(colony, 'solar-panels', placement);
+    expect(built.buildingPlacements[4][0]).toMatchObject({
+      buildingId: 'solar-panels',
+      ...placement,
+    });
+    expect(() => buildStructure(colony, 'solar-panels', { x: 0.5, y: 85 / 160 })).toThrow(
+      'open map location',
+    );
+    expect(() => buildStructure(built, 'medical-bay', placement)).toThrow('open map location');
+    expect(isValidBuildingPlacement(colony, { x: 0, y: 0.5 })).toBe(false);
+  });
+
+  it('applies daily production for every instance of a facility type', () => {
+    let colony = createColony(4);
+    colony = buildStructure(colony, 'solar-panels');
+    colony = buildStructure(colony, 'solar-panels');
+
+    expect(advanceDay(colony).resources.energy).toBe(106);
+    expect(validateSave(colony)).toEqual(colony);
+  });
+
+  it('builds crew homes without changing the colony population', () => {
     const colony = createColony(4);
     const built = buildStructure(colony, 'living-quarters');
 
-    expect(built.resources.metal).toBe(90);
-    expect(built.resources.regolith).toBe(104);
+    expect(built.resources.metal).toBe(110);
+    expect(built.resources.regolith).toBe(120);
     expect(built.buildings[4]).toContain('living-quarters');
     expect(built.people).toBe(7);
+  });
+
+  it('builds each new facility as a separate option', () => {
+    const newBuildings = [
+      'solar-panels',
+      'nuclear-power',
+      'medical-bay',
+      'oxygen-plant',
+      'soil-farm',
+      'hydroponic-farm',
+      'bug-protein-processor',
+      'regolith-collector',
+      'deep-rock-mining',
+    ] as const;
+
+    for (const buildingId of newBuildings) {
+      const built = buildStructure(createColony(4), buildingId);
+      expect(built.buildings[4]).toContain(buildingId);
+    }
+  });
+
+  it('balances the two farms by water and applies the protein processor food cycle', () => {
+    const soilFarm = BUILDINGS.find((building) => building.id === 'soil-farm')!;
+    const hydroponicFarm = BUILDINGS.find((building) => building.id === 'hydroponic-farm')!;
+    const proteinProcessor = BUILDINGS.find((building) => building.id === 'bug-protein-processor')!;
+
+    expect(soilFarm.consumption.water).toBeLessThan(hydroponicFarm.consumption.water!);
+    expect(soilFarm.production.food).toBeLessThan(hydroponicFarm.production.food!);
+    expect(proteinProcessor.production.food).toBeGreaterThan(proteinProcessor.consumption.food!);
+
+    const processed = advanceDay(buildStructure(createColony(4), 'bug-protein-processor'));
+    expect(processed.resources.food).toBe(70);
+  });
+
+  it('applies new power and life-support production on day transition', () => {
+    let colony = createColony(4);
+    for (const buildingId of ['solar-panels', 'nuclear-power', 'oxygen-plant'] as const) {
+      colony = buildStructure(colony, buildingId);
+    }
+
+    const nextDay = advanceDay(colony);
+    expect(nextDay.resources).toMatchObject({
+      energy: 119,
+      water: 64,
+      oxygen: 79,
+    });
   });
 
   it('applies daily production and crew consumption', () => {
@@ -146,11 +258,82 @@ describe('Lunar Frontier game rules', () => {
     expect(() => validateSave({ ...colony, people: -1 })).toThrow('invalid colony values');
   });
 
+  it('migrates version-two facility saves and assigns their existing buildings map locations', () => {
+    const { buildingPlacements: _buildingPlacements, ...versionTwoSave } = createColony(4);
+    const restored = validateSave({
+      ...versionTwoSave,
+      version: 2,
+      buildings: { 4: ['habitat', 'solar-array', 'regolith-mine', 'water-plant', 'hydroponics'] },
+    });
+
+    expect(restored.version).toBe(6);
+    expect(restored.buildings[4]).toEqual(['habitat', 'hydroponics']);
+    expect(restored.buildingPlacements[4]).toEqual([
+      { buildingId: 'hydroponics', x: 70 / 250, y: 46 / 160 },
+    ]);
+    expect(restored.people).toBe(7);
+  });
+
+  it('migrates version-three facility placements without moving the buildings', () => {
+    const placed = buildStructure(createColony(4), 'solar-panels', { x: 0.15, y: 0.8 });
+    const { buildingPlacements: _buildingPlacements, ...versionThreeSave } = placed;
+    const restored = validateSave({
+      ...versionThreeSave,
+      version: 3,
+      buildingPlacements: { 4: { 'solar-panels': { x: 0.15, y: 0.8 } } },
+    });
+
+    expect(restored.version).toBe(6);
+    expect(restored.buildingPlacements[4]).toEqual([
+      { buildingId: 'solar-panels', x: 0.15, y: 0.8 },
+    ]);
+  });
+
+  it('migrates version-four saves and preserves their facility placements', () => {
+    const placed = buildStructure(createColony(4), 'medical-bay', { x: 0.15, y: 0.8 });
+    const { starterTutorialSeen: _starterTutorialSeen, ...versionFourSave } = placed;
+    const restored = validateSave({ ...versionFourSave, version: 4 });
+
+    expect(restored.version).toBe(6);
+    expect(restored.starterTutorialSeen).toBe(false);
+    expect(restored.buildingPlacements[4]).toEqual([
+      { buildingId: 'medical-bay', x: 0.15, y: 0.8 },
+    ]);
+  });
+
+  it('removes discontinued facilities from version-five saves and their placements', () => {
+    const restored = validateSave({
+      ...createColony(4),
+      version: 5,
+      starterTutorialSeen: true,
+      buildings: { 4: ['habitat', 'solar-array', 'regolith-mine', 'water-plant', 'solar-panels'] },
+      buildingPlacements: {
+        4: [
+          { buildingId: 'solar-array', x: 0.15, y: 0.8 },
+          { buildingId: 'regolith-mine', x: 0.25, y: 0.8 },
+          { buildingId: 'water-plant', x: 0.35, y: 0.8 },
+          { buildingId: 'solar-panels', x: 0.45, y: 0.8 },
+        ],
+      },
+    });
+
+    expect(restored.version).toBe(6);
+    expect(restored.starterTutorialSeen).toBe(true);
+    expect(restored.buildings[4]).toEqual(['habitat', 'solar-panels']);
+    expect(restored.buildingPlacements[4]).toEqual([
+      { buildingId: 'solar-panels', x: 0.45, y: 0.8 },
+    ]);
+  });
+
   it('migrates existing version-one saves without losing the colony', () => {
-    const { lastFieldworkDay: _lastFieldworkDay, ...versionOneSave } = createColony(4);
+    const {
+      lastFieldworkDay: _lastFieldworkDay,
+      buildingPlacements: _buildingPlacements,
+      ...versionOneSave
+    } = createColony(4);
     const restored = validateSave({ ...versionOneSave, version: 1 });
 
-    expect(restored.version).toBe(2);
+    expect(restored.version).toBe(6);
     expect(restored.lastFieldworkDay).toBe(0);
     expect(restored.people).toBe(7);
     expect(restored.buildings[4]).toEqual(['habitat']);

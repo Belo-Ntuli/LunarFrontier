@@ -431,8 +431,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 
 .sector-layout { width: min(1500px, 100%); margin: 0 auto; padding: 17px 30px 11px; }
 .sector-toolbar { min-height: 45px; margin-bottom: 15px; display: flex; align-items: center; gap: 24px; }
-.back-button { padding: 7px 10px 7px 0; display: flex; align-items: center; gap: 9px; border: 0; color: #9aa8b8; background: transparent; font: 9px var(--mono); letter-spacing: .08em; cursor: pointer; }
-.back-button:hover { color: var(--teal); }
+.back-button { padding: 7px 10px; display: flex; align-items: center; gap: 9px; border: 1px solid rgba(133,159,179,.3); border-radius: 3px; color: #b7c5d0; background: #182230; font: 9px var(--mono); letter-spacing: .08em; cursor: pointer; }
+.back-button:hover { border-color: rgba(91,215,197,.65); color: var(--teal); background: #202f3b; }
+.back-button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 .back-button span { font-size: 17px; }
 .sector-toolbar-title { display: grid; gap: 3px; }
 .sector-toolbar-title .eyebrow { font-size: 8px; }
@@ -505,10 +506,14 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 .building-card { min-height: 87px; padding: 9px 0; display: grid; grid-template-columns: 35px minmax(0,1fr) auto; align-items: center; gap: 9px; border-top: 1px solid rgba(167,190,218,.1); }
 .building-icon { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid rgba(107,180,185,.24); color: #82d9cf; background: rgba(91,215,197,.06); font-size: 16px; }
 .icon-hydroponics { color: #a4e089; border-color: rgba(164,224,137,.25); background: rgba(164,224,137,.06); }
-.icon-solar-array { color: var(--gold); border-color: rgba(240,200,121,.25); background: rgba(240,200,121,.06); }
+.icon-solar-panels { color: #86cde0; border-color: rgba(134,205,224,.25); background: rgba(134,205,224,.06); }
+.icon-nuclear-power { color: #f0a06f; border-color: rgba(240,160,111,.25); background: rgba(240,160,111,.06); }
+.icon-medical-bay { color: #e990a2; border-color: rgba(233,144,162,.25); background: rgba(233,144,162,.06); }
+.icon-oxygen-plant, .icon-oxygen-recycler { color: #99adff; border-color: rgba(153,173,255,.25); background: rgba(153,173,255,.06); }
 .icon-ice-extractor { color: #77d8f3; border-color: rgba(119,216,243,.25); background: rgba(119,216,243,.06); }
-.icon-oxygen-recycler { color: #99adff; border-color: rgba(153,173,255,.25); background: rgba(153,173,255,.06); }
-.icon-regolith-mine { color: #dbb495; border-color: rgba(219,180,149,.25); background: rgba(219,180,149,.06); }
+.icon-soil-farm, .icon-hydroponic-farm { color: #a4e089; border-color: rgba(164,224,137,.25); background: rgba(164,224,137,.06); }
+.icon-bug-protein-processor { color: #d3a66e; border-color: rgba(211,166,110,.25); background: rgba(211,166,110,.06); }
+.icon-regolith-collector, .icon-deep-rock-mining { color: #dbb495; border-color: rgba(219,180,149,.25); background: rgba(219,180,149,.06); }
 .building-copy { min-width: 0; }
 .building-title-row { display: flex; align-items: center; gap: 7px; }
 .building-title-row h3 { margin: 0; overflow: hidden; color: #dce4ed; font: 500 10px var(--display); text-overflow: ellipsis; white-space: nowrap; }
@@ -516,10 +521,11 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 .building-yield { color: #7ed1ba; font: 8px var(--mono); }
 .building-cost { margin-top: 4px; color: #a899bd; font: 8px var(--mono); }
 .building-cost span { color: #687587; padding: 0 3px; }
+.building-cost .cost-free { color: #9dde7b; font-weight: 600; }
 .built-label { color: var(--teal); font: 7px var(--mono); letter-spacing: .08em; }
 .build-button { min-width: 74px; min-height: 29px; padding: 0 7px; border: 1px solid rgba(91,215,197,.31); border-radius: 2px; color: var(--teal); background: rgba(91,215,197,.07); font: 8px var(--mono); cursor: pointer; }
 .build-button:hover:not(:disabled) { background: rgba(91,215,197,.16); }
-.build-button.is-built { min-width: 29px; color: var(--teal); border-color: rgba(91,215,197,.14); background: transparent; cursor: default; }
+.build-button.is-placing { color: #f0c77f; border-color: rgba(240,191,116,.55); background: rgba(240,191,116,.09); }
 .build-button.is-unaffordable { color: #788495; border-color: rgba(167,190,218,.11); background: transparent; font-size: 7px; cursor: not-allowed; }
 .habitat-status { margin-top: 5px; padding: 9px; display: flex; align-items: center; gap: 9px; border: 1px solid rgba(91,215,197,.14); background: rgba(91,215,197,.035); }
 .habitat-icon { width: 26px; height: 26px; display: grid; place-items: center; color: #86dccf; background: rgba(91,215,197,.08); font-size: 17px; }
@@ -544,11 +550,21 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 .mission-over-card p { color: #d8a79a; font-size: 12px; line-height: 1.55; }
 .mission-over-card p.muted { color: #8995a5; }
 .mission-over-card .button { width: 100%; margin-top: 10px; }
+.starter-tutorial-overlay { position: fixed; z-index: 21; inset: 0; padding: 20px; display: grid; place-items: center; background: rgba(5,9,16,.78); backdrop-filter: blur(7px); }
+.starter-tutorial-card { width: min(500px, 100%); padding: 25px; border: 1px solid rgba(91,215,197,.38); background: #141a25; box-shadow: 0 25px 100px #0009; }
+.starter-tutorial-card .eyebrow { color: var(--teal); font-size: 9px; }
+.starter-tutorial-card h2 { margin: 12px 0 8px; font: 500 25px var(--display); }
+.starter-tutorial-card p { color: #aeb9c8; font-size: 12px; line-height: 1.6; }
+.starter-tutorial-card ul { margin: 18px 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.starter-tutorial-card li { padding: 9px 2px; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); color: #e2e8f0; font-size: 12px; }
+.starter-tutorial-card li strong { color: #9dde7b; font: 8px var(--mono); white-space: nowrap; }
+.starter-tutorial-card .starter-tutorial-note { margin: 0; color: #8593a6; font-size: 10px; }
+.starter-tutorial-card .button { width: 100%; margin-top: 18px; }
 
 .sector-mode .topbar { backdrop-filter: none; background: #080c16; }
 .sector-mode .resource-bar { display: none; }
 .sector-mode .panel { background: #111827; box-shadow: none; }
-.sector-mode .mission-over { backdrop-filter: none; }
+.sector-mode .mission-over, .sector-mode .starter-tutorial-overlay { backdrop-filter: none; }
 .sector-layout { width: min(1880px, 100%); padding: 10px 20px 10px; }
 .sector-toolbar { margin-bottom: 10px; }
 .sector-resource-rail {
@@ -593,6 +609,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 .surface-sky { height: auto; min-height: 0; }
 .surface-sky, .surface-polar .surface-sky { display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid rgba(183,207,214,.22); background: linear-gradient(90deg, #26343c, #34454c 55%, #28363d); }
 .surface-grid { height: auto; min-height: 0; background: radial-gradient(ellipse at 50% 45%, #a9c1c6, #8ca6ad 72%, #718990); }
+.surface-grid:focus-visible { outline: 2px solid #f0bf74; outline-offset: -3px; }
+.surface-grid.is-placement-active { cursor: crosshair; }
+.surface-map-world { width: 100%; height: 100%; position: absolute; inset: 0; transform-origin: 50% 53.125%; }
 .surface-label { position: static; }
 .surface-label .eyebrow { color: #f0bf74; font-size: 7px; }
 .surface-label h2 { display: none; }
@@ -601,6 +620,29 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 .surface-illustration { width: 100%; height: 100%; position: absolute; inset: 0; }
 .surface-illustration.pixelated-map-source { opacity: 0; }
 .pixelated-map { width: 100%; height: 100%; position: absolute; z-index: 1; inset: 0; image-rendering: pixelated; pointer-events: none; }
+.crew-wander-layer { width: 100%; height: 100%; position: absolute; z-index: 2; inset: 0; image-rendering: pixelated; pointer-events: none; }
+.placement-preview { width: 7.5%; aspect-ratio: 1; position: absolute; z-index: 3; border: 2px dashed #ffe09a; border-radius: 50%; background: rgba(240,191,116,.2); box-shadow: 0 0 0 2px rgba(37,49,53,.72), 0 0 18px rgba(255,215,140,.35); pointer-events: none; transform: translate(-50%,-50%); }
+.facility-nameplate-layer { position: absolute; z-index: 2; inset: 0; pointer-events: none; }
+.facility-nameplate { max-width: 48px; position: absolute; padding: 2px 3px; border: 1px solid rgba(22,32,36,.88); border-radius: 2px; color: #f2eee3; background: rgba(25,34,38,.92); box-shadow: 0 2px 5px rgba(0,0,0,.52); font: 6px/1.2 var(--mono); letter-spacing: .02em; text-align: center; overflow-wrap: anywhere; transform: translate(-50%, 25px); }
+.facility-nameplate-above { transform: translate(-50%, calc(-100% - 25px)); }
+.placement-preview { width: 7.5%; aspect-ratio: 1; position: absolute; z-index: 2; border: 2px dashed #ffe09a; border-radius: 50%; background: rgba(240,191,116,.2); box-shadow: 0 0 0 2px rgba(37,49,53,.72), 0 0 18px rgba(255,215,140,.35); pointer-events: none; transform: translate(-50%,-50%); }
+.placement-preview::before, .placement-preview::after { content: ''; position: absolute; left: 50%; top: 50%; background: #ffe09a; transform: translate(-50%,-50%); }
+.placement-preview::before { width: 2px; height: 52%; }
+.placement-preview::after { width: 52%; height: 2px; }
+.placement-preview.is-invalid { border-color: #ff9a87; background: rgba(227,111,93,.2); box-shadow: 0 0 0 2px rgba(37,49,53,.72), 0 0 18px rgba(227,111,93,.35); }
+.placement-preview.is-invalid::before, .placement-preview.is-invalid::after { background: #ff9a87; }
+.placement-prompt { max-width: min(390px, calc(100% - 24px)); position: absolute; z-index: 5; top: 10px; left: 50%; padding: 7px 8px; display: flex; align-items: center; gap: 9px; border: 1px solid rgba(240,191,116,.58); background: rgba(25,34,38,.96); box-shadow: 0 4px 14px rgba(0,0,0,.32); transform: translateX(-50%); }
+.placement-prompt strong { color: #f0c77f; font: 8px var(--mono); white-space: nowrap; }
+.placement-prompt span { color: #d3dddb; font-size: 9px; line-height: 1.3; }
+.placement-prompt button { min-height: 25px; padding: 0 7px; border: 1px solid rgba(198,216,215,.3); color: #e4ece9; background: #303e43; font: 8px var(--mono); cursor: pointer; }
+.placement-prompt button:hover { border-color: #f0bf74; }
+.map-zoom-controls { position: absolute; z-index: 6; top: 10px; left: 10px; padding: 4px; display: flex; align-items: center; gap: 4px; border: 1px solid rgba(198,216,215,.3); background: rgba(25,34,38,.9); box-shadow: 0 3px 12px rgba(0,0,0,.24); }
+.map-zoom-controls button { min-width: 27px; height: 25px; padding: 0 5px; border: 1px solid rgba(191,211,211,.25); color: #e4ece9; background: #303e43; font: 10px var(--mono); cursor: pointer; }
+.map-zoom-controls button:hover:not(:disabled) { border-color: #f0bf74; background: #3e4c50; }
+.map-zoom-controls button:focus-visible { outline: 2px solid #f0bf74; outline-offset: 2px; }
+.map-zoom-controls button:disabled { opacity: .48; cursor: not-allowed; }
+.map-zoom-level { min-width: 38px; color: #e0c58f; font: 7px var(--mono); text-align: center; }
+.map-zoom-reset { letter-spacing: .04em; }
 .surface-illustration text { font-family: var(--mono); text-anchor: middle; letter-spacing: 1.5px; }
 .map-ground { fill: #9db6bc; }
 .map-frost { fill: url(#map-frost); opacity: .72; }
@@ -642,8 +684,20 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 .solar-frame { fill: #ddd1b9; stroke: #f0dfc0; stroke-width: 3; }
 .solar-panel { fill: #284f61; stroke: #9bc2c7; stroke-width: 3; }
 .solar-cell-line { fill: none; stroke: #79aeb9; stroke-width: 1.5; }
+.nuclear-vessel, .medical-roof { fill: #47575d; stroke: #9aa8a6; stroke-width: 3; }
+.reactor-core { fill: #ef9b62; stroke: #ffd18a; stroke-width: 2; }
+.reactor-pipe, .oxygen-pipe, .water-pipe, .bug-pipe, .collector-arm { fill: none; stroke: #b7c5bd; stroke-width: 4; }
+.medical-cross { fill: none; stroke: #f3d9d9; stroke-width: 7; }
+.water-vessel { fill: #315564; stroke: #83cbd4; stroke-width: 3; }
+.water-level { fill: none; stroke: #76c8d5; stroke-width: 4; }
 .greenhouse-shell { fill: #526d58; stroke: #a4bc87; stroke-width: 2; }
 .greenhouse-rib { fill: none; stroke: #a4c88a; stroke-width: 4; }
+.soil-plots { fill: #554936; stroke: #ad966b; stroke-width: 3; }
+.soil-row { fill: none; stroke: #9bb46e; stroke-width: 4; }
+.bug-vat { fill: #514039; stroke: #c3a36f; stroke-width: 3; }
+.vat-secondary { fill: #70604a; }
+.collector-scoop { fill: #c29b62; stroke: #ead09a; stroke-width: 2; }
+.deep-shaft { fill: none; stroke: #a9a69a; stroke-width: 5; }
 .facility-door, .rig-housing { fill: #b58b51; stroke: #eed29b; stroke-width: 2; }
 .rig-frame, .recycler-pipe { fill: none; stroke: #b8c5bd; stroke-width: 4; }
 .recycler-tank { fill: #536b70; stroke: #bdc9bc; stroke-width: 3; }
@@ -681,7 +735,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 .building-cost .cost-met { color: #9caabc; }
 .building-cost .cost-missing { color: #efa38e; }
 .build-button { min-width: 50px; min-height: 28px; padding: 0 4px; font-size: 7px; }
-.build-button.is-built { min-width: 50px; }
 .field-note { margin-top: 9px; }
 .field-note p { font-size: 8px; }
 .colony-status-strip { min-height: 34px; margin-top: 7px; }
