@@ -28,6 +28,7 @@ The test suite covers colony initialization, facility construction and placement
 - `src/game.ts` — sector data, economy values, colony rules, hazard scheduling and repair, and local save validation
 - `src/moon-scene.ts` — Three.js lunar globe, textured terrain regions, rotation, and pointer selection
 - `src/ui.ts` — atlas, pixelated sector map and wandering crew sprites, fieldwork and HUD, interactive sector map and fieldwork, hazard board, construction, timer, and save/load behavior
+- `src/ui.ts` — atlas, pixelated sector map, wandering crew and construction animation, fieldwork, HUD, timer, and save/load behavior
 - `src/style.css` — responsive visual design and reduced-motion support
 - `src/game.test.ts` — core game-rule tests
 - `GAME_SPEC.md` — gameplay behavior, initial balancing values, and acceptance criteria
