@@ -49,7 +49,7 @@ The initial resource rates, building actions, exploration costs, and survival/fa
 - Selecting a sector from the adjacent list must remain available as an alternative to interacting with the globe.
 - Selecting or keyboard-focusing a sector in the mission map smoothly rotates the globe to bring that sector into view; respect reduced-motion preferences.
 - The sector details panel can be collapsed and reopened with an accessible arrow control; the mission map remains visible.
-- From 901px and wider, keep the mission map and sector details beside the globe and size both sidebars to about two-thirds of their previous width, keeping their controls within the panels; narrower layouts may stack the details panel below the map and globe.
+- From 901px and wider, keep the mission map, globe, and sector details in three columns, with compact sidebars around 160–205px wide and controls contained within their panels. At narrower widths, the details panel may stack below the map and globe.
 - Highlight the selected sector in blue in both the sector list and the 3D overview.
 - Dragging rotates the Moon. The sector list remains an accessible alternative to pointer-based globe selection.
 - Show which sector is selected, unlocked, or locked with visually distinct states.
@@ -283,14 +283,13 @@ The initial implementation is ready for review when all of the following are tru
 21. The active sector map shows one distinct pixel-art character per crew member; characters wander among buildings and nearby sites, stop when paused or the mission ends, and remain still for reduced-motion preferences. Players can build multiple instances of a facility in one sector; each instance has its own location, costs, and daily resource effects.
 22. Opening the first sector in an unseen save shows a dismissible tutorial about the four free first placements; dismissal persists, and each eligible first placement spends no construction materials.
 23. Regolith & metal mine, Solar array, and Water plant are no longer buildable; loading an existing save removes these facilities and their saved locations.
-19. The starting habitat and living quarters, along with each constructed facility, are visibly represented on the 2D sector surface. Building living quarters costs 20 Metal and 16 Lunar regolith and does not increase population.
-20. The sector details panel can be collapsed and reopened with an accessible arrow control, while the mission map remains visible; the selected sector is highlighted blue in the list and 3D globe.
-21. Selecting a sector in the mission map rotates the globe to show it; this transition respects reduced-motion preferences.
-22. Selecting a sector on the globe updates the selection and details without resetting the camera away from that sector.
-23. Each sector has restrained, visible 3D surface details that correspond to its terrain description, while existing sector shapes and ravine boundaries remain unchanged.
-24. Sunlight moves around the Moon's local axis over a 45-second in-game day, remains aligned with the globe's terrain when the globe is manipulated, and stops while the simulation is paused or the page is hidden.
-25. Background stars twinkle independently at a gentle, staggered pace and remain static for users who prefer reduced motion.
-26. Each visible sector on the 3D globe has a raised bubble showing its two-digit number and larger name, without a "Sector" prefix, connected to the sector by a line and surface dot; labels follow globe rotation and do not prevent sector selection.
-27. From 901px and wider, the atlas keeps the mission map, globe, and sector details in three columns, with each sidebar about two-thirds of its previous width and controls contained within them; narrower layouts can stack sector details beneath the map and globe.
+24. The sector details panel can be collapsed and reopened with an accessible arrow control, while the mission map remains visible; the selected sector is highlighted blue in the list and 3D globe.
+25. Selecting a sector in the mission map rotates the globe to show it; this transition respects reduced-motion preferences.
+26. Selecting a sector on the globe updates the selection and details without resetting the camera away from that sector.
+27. Each sector has visible 3D surface details that correspond to its terrain description, while existing sector shapes and ravine boundaries remain unchanged.
+28. Sunlight moves around the Moon's local axis over a 45-second in-game day, remains aligned with the globe's terrain when the globe is manipulated, and stops while the simulation is paused or the page is hidden.
+29. Background stars twinkle independently at a gentle, staggered pace and remain static for users who prefer reduced motion.
+30. Each visible sector on the 3D globe has a raised bubble showing its two-digit number and larger name, without a "Sector" prefix, connected to the sector by a line and surface dot; labels follow globe rotation and do not prevent sector selection.
+31. From 901px and wider, the atlas keeps the mission map, globe, and sector details in three columns, with compact sidebars around 160–205px wide and controls contained within them; narrower layouts can stack sector details beneath the map and globe.
 
 The economy, day length, and exploration costs are implemented as the initial values in this specification and should be adjusted only with corresponding UI, tests, and documentation updates.
