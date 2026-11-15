@@ -44,6 +44,44 @@ const MIN_MAP_ZOOM = 0.75;
 const MAX_MAP_ZOOM = 2.4;
 const MAP_ZOOM_STEP = 0.15;
 let mapZoom = BASE_MAP_ZOOM;
+let crewAnimationFrame: number | null = null;
+
+interface CrewStop {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;
+}
+
+interface CrewWalker {
+  x: number;
+  y: number;
+  startX: number;
+  startY: number;
+  targetX: number;
+  targetY: number;
+  controlX: number;
+  controlY: number;
+  progress: number;
+  duration: number;
+  idleUntil: number;
+  currentStop: string;
+  targetStop: string;
+  suit: string;
+  trim: string;
+  visor: string;
+  phase: number;
+}
+
+const CREW_PALETTE = [
+  { suit: '#d8d1b8', trim: '#d48755', visor: '#78c6ce' },
+  { suit: '#c4d2cb', trim: '#d5b560', visor: '#8ac8d9' },
+  { suit: '#c9c4d8', trim: '#9e83c2', visor: '#79c5cc' },
+  { suit: '#d4c7b5', trim: '#c36c64', visor: '#85c9c2' },
+  { suit: '#bbcbd6', trim: '#7fa96f', visor: '#e5c573' },
+  { suit: '#d5c9c0', trim: '#6f9cae', visor: '#d8c17a' },
+  { suit: '#c6d0bc', trim: '#c18b54', visor: '#77b9c9' },
+];
 
 const BUILDING_PURPOSE: Record<BuildingId, string> = {
   habitat: 'Keeps the crew sheltered.',
@@ -919,6 +957,196 @@ function renderPixelatedSurfaceMap(): void {
   setMapZoom(mapZoom);
 }
 
+function renderWanderingCrew(): void {
+  const mapWorld = document.querySelector<HTMLElement>('.surface-map-world');
+  const svg = mapWorld?.querySelector<SVGSVGElement>('.surface-illustration');
+  if (!mapWorld || !svg || !colony) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'crew-wander-layer';
+  canvas.width = 500;
+  canvas.height = 320;
+  canvas.setAttribute('aria-hidden', 'true');
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Could not create the crew animation layer.');
+  context.imageSmoothingEnabled = false;
+  mapWorld.append(canvas);
+
+  const toMapPoint = (element: Element): { x: number; y: number } | null => {
+    const match = element.getAttribute('transform')?.match(/translate\(([\d.]+)\s+([\d.]+)\)/);
+    return match
+      ? { x: Number(match[1]) / 4, y: Number(match[2]) / 4 }
+      : null;
+  };
+  const buildings = [...svg.querySelectorAll<SVGGElement>('.colony-structure')]
+    .map((building, index) => {
+      const point = toMapPoint(building);
+      if (!point) return null;
+      return {
+        id: `building-${index}`,
+        ...point,
+        radius: building.classList.contains('habitat-structure') ? 15 : 10,
+      };
+    })
+    .filter((stop): stop is CrewStop => stop !== null);
+  const stops: CrewStop[] = [
+    ...buildings,
+    { id: 'mineral-ridge', x: 105, y: 116, radius: 8 },
+    ...(getSector(colony.currentSector).iceDeposits
+      ? [{ id: 'shadowed-ice', x: 211.75, y: 72, radius: 8 }]
+      : []),
+  ];
+  if (!stops.length) return;
+
+  const stageAt = (stop: CrewStop, angle: number): { x: number; y: number } => ({
+    x: stop.x + Math.cos(angle) * stop.radius,
+    y: stop.y + Math.sin(angle) * stop.radius,
+  });
+  const pickStop = (currentStop: string): CrewStop => {
+    const otherStops = stops.filter((stop) => stop.id !== currentStop);
+    const otherBuildings = buildings.filter((stop) => stop.id !== currentStop);
+    const destinationPool =
+      buildings.length > 1 && otherBuildings.length && Math.random() < 0.8
+        ? otherBuildings
+        : otherStops;
+    return destinationPool[Math.floor(Math.random() * destinationPool.length)] ?? stops[0];
+  };
+  const walkers: CrewWalker[] = Array.from({ length: colony.people }, (_, index) => {
+    const stop = buildings[index % buildings.length] ?? stops[index % stops.length];
+    const point = stageAt(stop, (index / Math.max(1, colony!.people)) * Math.PI * 2);
+    const appearance = CREW_PALETTE[index % CREW_PALETTE.length];
+    return {
+      ...point,
+      startX: point.x,
+      startY: point.y,
+      targetX: point.x,
+      targetY: point.y,
+      controlX: point.x,
+      controlY: point.y,
+      progress: 1,
+      duration: 1,
+      idleUntil: performance.now() + index * 260,
+      currentStop: stop.id,
+      targetStop: stop.id,
+      ...appearance,
+      phase: index % 2,
+    };
+  });
+
+  const beginWalk = (walker: CrewWalker, now: number): void => {
+    const destination = pickStop(walker.currentStop);
+    const point = stageAt(destination, Math.random() * Math.PI * 2);
+    walker.startX = walker.x;
+    walker.startY = walker.y;
+    walker.targetX = point.x;
+    walker.targetY = point.y;
+    walker.targetStop = destination.id;
+    const distance = Math.hypot(point.x - walker.x, point.y - walker.y);
+    const bend = (Math.random() - 0.5) * 18;
+    const perpendicularX = distance ? -(point.y - walker.y) / distance : 0;
+    const perpendicularY = distance ? (point.x - walker.x) / distance : 0;
+    walker.controlX = (walker.x + point.x) / 2 + perpendicularX * bend;
+    walker.controlY = (walker.y + point.y) / 2 + perpendicularY * bend;
+    walker.duration = Math.max(1.2, distance / (12 + Math.random() * 5));
+    walker.progress = 0;
+    walker.idleUntil = now;
+  };
+
+  const drawWalker = (walker: CrewWalker, now: number): void => {
+    const x = Math.round(walker.x);
+    const y = Math.round(walker.y);
+    const walking = walker.progress < 1;
+    const step = walking ? Math.floor(now / 170 + walker.phase) % 2 : 0;
+    const block = (color: string, left: number, top: number, width: number, height: number): void => {
+      context.fillStyle = color;
+      context.fillRect(
+        x + Math.round(left * 0.65),
+        y + Math.round(top * 0.65),
+        Math.max(1, Math.round(width * 0.65)),
+        Math.max(1, Math.round(height * 0.65)),
+      );
+    };
+
+    block('rgba(28, 41, 46, .7)', -3, 3, 7, 2);
+    block('#24343a', -2 + step, 1, 2, 3);
+    block('#24343a', 1 - step, 1, 2, 3);
+    block(walker.suit, -2, -3, 5, 4);
+    block('#9da9a5', -3, -2, 1, 2);
+    block(walker.trim, 2, -2, 1, 2);
+    block('#28383d', -2, -5, 5, 2);
+    block('#dce0d4', -1, -6, 3, 2);
+    block(walker.visor, 0, -5, 2, 1);
+    block(walker.trim, -3, -3, 1, 2);
+    block('#36474c', 3, -3, 1, 3);
+    block(walker.trim, -1, 2 + step, 2, 1);
+    block(walker.trim, 1, 2 + (1 - step), 2, 1);
+  };
+
+  const pixelScale = 2;
+  const mapWidth = 250;
+  const mapHeight = 160;
+  const cameraX = 125;
+  const cameraY = 85;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let previousFrameTime = performance.now();
+  const drawFrame = (now: number): void => {
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.setTransform(
+      pixelScale * BASE_MAP_ZOOM,
+      0,
+      0,
+      pixelScale * BASE_MAP_ZOOM,
+      pixelScale * (mapWidth / 2 - cameraX * BASE_MAP_ZOOM),
+      pixelScale * (mapHeight / 2 - cameraY * BASE_MAP_ZOOM),
+    );
+    for (const walker of walkers) drawWalker(walker, now);
+  };
+  const animate = (now: number): void => {
+    if (!canvas.isConnected) return;
+    if (document.visibilityState === 'hidden') {
+      crewAnimationFrame = window.requestAnimationFrame(animate);
+      return;
+    }
+
+    const canMove = !reducedMotion && colony && !colony.paused && !colony.failed;
+    if (canMove) {
+      const deltaSeconds = Math.min(50, Math.max(0, now - previousFrameTime)) / 1000;
+      for (const walker of walkers) {
+        if (walker.progress >= 1 && now >= walker.idleUntil) {
+          walker.currentStop = walker.targetStop;
+          beginWalk(walker, now);
+        }
+        if (walker.progress < 1) {
+          walker.progress = Math.min(1, walker.progress + deltaSeconds / walker.duration);
+          const inverse = 1 - walker.progress;
+          walker.x =
+            inverse * inverse * walker.startX +
+            2 * inverse * walker.progress * walker.controlX +
+            walker.progress * walker.progress * walker.targetX;
+          walker.y =
+            inverse * inverse * walker.startY +
+            2 * inverse * walker.progress * walker.controlY +
+            walker.progress * walker.progress * walker.targetY;
+          if (walker.progress === 1) {
+            walker.x = walker.targetX;
+            walker.y = walker.targetY;
+            walker.idleUntil = now + 650 + Math.random() * 1300;
+          }
+        }
+      }
+    }
+    previousFrameTime = now;
+
+    drawFrame(now);
+    if (canMove) crewAnimationFrame = window.requestAnimationFrame(animate);
+    else crewAnimationFrame = null;
+  };
+
+  drawFrame(performance.now());
+  crewAnimationFrame = window.requestAnimationFrame(animate);
+}
+
 function sectorScreenMarkup(): string {
   if (!colony) return globeScreenMarkup();
   const sector = getSector(colony.currentSector);
@@ -1224,6 +1452,10 @@ function handleAction(button: HTMLElement): void {
 }
 
 function render(): void {
+  if (crewAnimationFrame !== null) {
+    window.cancelAnimationFrame(crewAnimationFrame);
+    crewAnimationFrame = null;
+  }
   moonScene?.dispose();
   moonScene = null;
   document.querySelector<HTMLDivElement>('#app')!.innerHTML =
@@ -1253,6 +1485,7 @@ function render(): void {
     }
   } else {
     renderPixelatedSurfaceMap();
+    renderWanderingCrew();
   }
 }
 
