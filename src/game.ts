@@ -1,6 +1,11 @@
 export const STORAGE_KEY = 'lunar-frontier-save';
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const DAY_LENGTH_MS = 45_000;
+
+const HAZARD_INTERVAL_MIN = 10;
+const HAZARD_INTERVAL_MAX = 15;
+const BASE_MAINTENANCE_CHANCE = 0.2;
+const DUST_STORM_SOLAR_OUTPUT = 0.5;
 
 export type ResourceKey =
   | 'water'
@@ -70,6 +75,21 @@ export interface BuildingPlacement {
   y: number;
 }
 
+export type HazardKind =
+  | 'meteorite-impact'
+  | 'dust-storm'
+  | 'solar-panel-maintenance'
+  | 'structural-decay'
+  | 'facility-maintenance';
+
+export interface HazardEvent {
+  id: number;
+  kind: HazardKind;
+  day: number;
+  sectorId: number | null;
+  buildingId: BuildingId | null;
+}
+
 export interface ColonySave {
   version: number;
   startingSector: number;
@@ -82,6 +102,11 @@ export interface ColonySave {
   day: number;
   elapsedMs: number;
   lastFieldworkDay: number;
+  hazardEvents: HazardEvent[];
+  hazardProgress: number;
+  hazardInterval: number;
+  randomSeed: number;
+  nextHazardId: number;
   paused: boolean;
   failed: boolean;
   failureReason: string;
@@ -491,7 +516,93 @@ export const FIELDWORK: FieldworkDefinition[] = [
   },
 ];
 
+const FACILITY_MAINTENANCE_COSTS: Partial<
+  Record<BuildingId, Partial<Resources>>
+> = {
+  'nuclear-power': { metal: 2, regolith: 3 },
+  'oxygen-plant': { metal: 2 },
+  'soil-farm': { water: 2 },
+  'hydroponic-farm': { water: 3, metal: 1 },
+};
+
+const SOLAR_BUILDINGS: BuildingId[] = ['solar-array', 'solar-panels'];
+
+function nextRandom(seed: number): { value: number; seed: number } {
+  let next = seed >>> 0;
+  next ^= next << 13;
+  next ^= next >>> 17;
+  next ^= next << 5;
+  const normalized = next >>> 0 || 1;
+  return { value: normalized / 0x1_0000_0000, seed: normalized };
+}
+
+function initialRandomSeed(): number {
+  return Math.floor(Math.random() * 0xffff_ffff) + 1;
+}
+
+export function getMaintenanceChance(unlockedSectorCount: number): number {
+  return Math.min(1, Math.max(0, unlockedSectorCount) * BASE_MAINTENANCE_CHANCE);
+}
+
+export function getHazardCost(event: HazardEvent): Partial<Resources> {
+  switch (event.kind) {
+    case 'meteorite-impact':
+      return { metal: 2, regolith: 4 };
+    case 'dust-storm':
+    case 'solar-panel-maintenance':
+      return { metal: 1, regolith: 1 };
+    case 'structural-decay':
+      return { metal: 2, regolith: 2 };
+    case 'facility-maintenance': {
+      if (!event.buildingId) throw new Error('Facility maintenance needs a target.');
+      const cost = FACILITY_MAINTENANCE_COSTS[event.buildingId];
+      if (!cost) throw new Error(`No maintenance cost is defined for ${event.buildingId}.`);
+      return cost;
+    }
+  }
+}
+
+export function getHazardTitle(event: HazardEvent): string {
+  const buildingName = event.buildingId
+    ? getBuilding(event.buildingId).name
+    : 'Facility';
+  switch (event.kind) {
+    case 'meteorite-impact':
+      return 'Meteorite damage';
+    case 'dust-storm':
+      return 'Dust storm';
+    case 'solar-panel-maintenance':
+      return 'Solar panel maintenance';
+    case 'structural-decay':
+      return 'Structural decay';
+    case 'facility-maintenance':
+      return `${buildingName} maintenance`;
+  }
+}
+
+export function getHazardDescription(event: HazardEvent): string {
+  const building = event.buildingId ? getBuilding(event.buildingId) : null;
+  switch (event.kind) {
+    case 'meteorite-impact':
+      return `${building?.name ?? 'Infrastructure'} is damaged and offline until repaired.`;
+    case 'dust-storm':
+      return 'Dust has reduced solar power output to 50%. Clean the panels to restore full output.';
+    case 'solar-panel-maintenance':
+      return `${building?.name ?? 'Solar panels'} are offline until cleaned or repaired.`;
+    case 'structural-decay':
+      return `${building?.name ?? 'A structure'} is offline until its decay is repaired.`;
+    case 'facility-maintenance':
+      return `${building?.name ?? 'This facility'} is offline until maintenance is complete.`;
+  }
+}
+
+export function createSolarFlareHazard(): null {
+  // Reserved for the future NASA DONKI integration.
+  return null;
+}
+
 export function createColony(startingSector: number): ColonySave {
+  const intervalSeed = nextRandom(initialRandomSeed());
   return {
     version: SAVE_VERSION,
     startingSector,
@@ -511,6 +622,13 @@ export function createColony(startingSector: number): ColonySave {
     day: 1,
     elapsedMs: 0,
     lastFieldworkDay: 0,
+    hazardEvents: [],
+    hazardProgress: 0,
+    hazardInterval:
+      HAZARD_INTERVAL_MIN +
+      Math.floor(intervalSeed.value * (HAZARD_INTERVAL_MAX - HAZARD_INTERVAL_MIN + 1)),
+    randomSeed: intervalSeed.seed,
+    nextHazardId: 1,
     paused: false,
     failed: false,
     failureReason: '',
@@ -704,52 +822,105 @@ export function performFieldwork(
   return { ...colony, resources, lastFieldworkDay: colony.day };
 }
 
-export function advanceDay(colony: ColonySave): ColonySave {
-  if (colony.paused || colony.failed) return colony;
+function hasBuildingIssue(
+  events: HazardEvent[],
+  sectorId: number,
+  buildingId: BuildingId,
+): boolean {
+  return events.some(
+    (event) => event.sectorId === sectorId && event.buildingId === buildingId,
+  );
+}
 
-  const production: Resources = {
-    water: 0,
-    food: 0,
-    energy: 0,
-    oxygen: 0,
+export function getDailyResourceRates(colony: ColonySave): Resources {
+  const rates: Resources = {
+    water: -colony.people,
+    food: -colony.people,
+    energy: -Math.ceil(colony.people / 2),
+    oxygen: -colony.people,
     metal: 0,
     regolith: 0,
   };
-  const consumption: Resources = {
-    water: colony.people,
-    food: colony.people,
-    energy: Math.ceil(colony.people / 2),
-    oxygen: colony.people,
-    metal: 0,
-    regolith: 0,
-  };
+  const dustStormActive = colony.hazardEvents.some((event) => event.kind === 'dust-storm');
 
-  Object.values(colony.buildings)
-    .flat()
-    .forEach((buildingId) => {
+  for (const [sectorKey, buildingIds] of Object.entries(colony.buildings)) {
+    const sectorId = Number(sectorKey);
+    for (const buildingId of buildingIds) {
+      if (hasBuildingIssue(colony.hazardEvents, sectorId, buildingId)) continue;
       const building = getBuilding(buildingId);
-      RESOURCE_ORDER.forEach((resource) => {
-        production[resource] += building.production[resource] ?? 0;
-        consumption[resource] += building.consumption[resource] ?? 0;
-      });
-    });
+      for (const resource of RESOURCE_ORDER) {
+        let production = building.production[resource] ?? 0;
+        if (
+          dustStormActive &&
+          resource === 'energy' &&
+          SOLAR_BUILDINGS.includes(buildingId)
+        ) {
+          production *= DUST_STORM_SOLAR_OUTPUT;
+        }
+        rates[resource] += production - (building.consumption[resource] ?? 0);
+      }
+    }
+  }
+  return rates;
+}
 
-  const resources = { ...colony.resources };
-  for (const resource of RESOURCE_ORDER) {
-    resources[resource] = Math.max(
-      0,
-      resources[resource] + production[resource] - consumption[resource],
+function maintenanceKindsFor(buildingId: BuildingId): HazardKind[] {
+  const kinds: HazardKind[] = ['structural-decay'];
+  if (SOLAR_BUILDINGS.includes(buildingId)) kinds.push('solar-panel-maintenance');
+  if (FACILITY_MAINTENANCE_COSTS[buildingId]) kinds.push('facility-maintenance');
+  return kinds;
+}
+
+function getIntactBuildings(colony: ColonySave, events: HazardEvent[]) {
+  return colony.unlockedSectors.flatMap((sectorId) =>
+    (colony.buildings[sectorId] ?? [])
+      .filter((buildingId) => !hasBuildingIssue(events, sectorId, buildingId))
+      .map((buildingId) => ({ sectorId, buildingId })),
+  );
+}
+
+export function repairHazard(colony: ColonySave, eventId: number): ColonySave {
+  if (colony.failed) throw new Error('The mission has ended.');
+  if (colony.paused) throw new Error('Resume the simulation before repairing hazards.');
+  const event = colony.hazardEvents.find((item) => item.id === eventId);
+  if (!event) throw new Error('That hazard is no longer active.');
+  const cost = getHazardCost(event);
+  const missing = RESOURCE_ORDER.find(
+    (resource) => colony.resources[resource] < (cost[resource] ?? 0),
+  );
+  if (missing) {
+    throw new Error(
+      `Not enough ${RESOURCE_INFO[missing].label.toLowerCase()} to repair this hazard.`,
     );
   }
 
+  const resources = { ...colony.resources };
+  RESOURCE_ORDER.forEach((resource) => {
+    resources[resource] -= cost[resource] ?? 0;
+  });
+  return {
+    ...colony,
+    resources,
+    hazardEvents: colony.hazardEvents.filter((item) => item.id !== eventId),
+  };
+}
+
+export function advanceDay(colony: ColonySave): ColonySave {
+  if (colony.paused || colony.failed) return colony;
+
+  const rates = getDailyResourceRates(colony);
+  const resources = { ...colony.resources };
+  for (const resource of RESOURCE_ORDER) {
+    resources[resource] = Math.max(0, resources[resource] + rates[resource]);
+  }
+
   const missingLifeSupport = (['water', 'food', 'oxygen', 'energy'] as const).find(
-    (resource) => colony.resources[resource] + production[resource] - consumption[resource] < 0,
+    (resource) => colony.resources[resource] + rates[resource] < 0,
   );
   const failureReason = missingLifeSupport
     ? `The crew ran out of ${RESOURCE_INFO[missingLifeSupport].label.toLowerCase()}.`
     : '';
-
-  return {
+  const nextColony: ColonySave = {
     ...colony,
     resources,
     day: colony.day + 1,
@@ -758,6 +929,78 @@ export function advanceDay(colony: ColonySave): ColonySave {
     failed: Boolean(failureReason),
     failureReason,
   };
+  if (failureReason) return nextColony;
+
+  let randomSeed = colony.randomSeed;
+  const random = (): number => {
+    const result = nextRandom(randomSeed);
+    randomSeed = result.seed;
+    return result.value;
+  };
+  let hazardEvents = [...colony.hazardEvents];
+  let hazardProgress = colony.hazardProgress;
+  let hazardInterval = colony.hazardInterval;
+  let nextHazardId = colony.nextHazardId;
+  const hasEnvironmentHazard = hazardEvents.some(
+    (event) => event.kind === 'meteorite-impact' || event.kind === 'dust-storm',
+  );
+
+  if (!hasEnvironmentHazard) {
+    hazardProgress += colony.unlockedSectors.length;
+    if (hazardProgress >= hazardInterval) {
+      const intactBuildings = getIntactBuildings(colony, hazardEvents);
+      const hasSolarFacility = colony.unlockedSectors.some((sectorId) =>
+        (colony.buildings[sectorId] ?? []).some((id) => SOLAR_BUILDINGS.includes(id)),
+      );
+      const possibleHazards: HazardKind[] = [];
+      if (intactBuildings.length > 0) possibleHazards.push('meteorite-impact');
+      if (hasSolarFacility) possibleHazards.push('dust-storm');
+      if (possibleHazards.length > 0) {
+        const kind = possibleHazards[Math.floor(random() * possibleHazards.length)];
+        const target =
+          kind === 'meteorite-impact'
+            ? intactBuildings[Math.floor(random() * intactBuildings.length)]
+            : null;
+        hazardEvents.push({
+          id: nextHazardId++,
+          kind,
+          day: nextColony.day,
+          sectorId: target?.sectorId ?? null,
+          buildingId: target?.buildingId ?? null,
+        });
+      }
+      hazardProgress = 0;
+      hazardInterval =
+        HAZARD_INTERVAL_MIN +
+        Math.floor(random() * (HAZARD_INTERVAL_MAX - HAZARD_INTERVAL_MIN + 1));
+    }
+  }
+
+  const maintenanceChance = getMaintenanceChance(colony.unlockedSectors.length);
+  for (const sectorId of colony.unlockedSectors) {
+    for (const buildingId of colony.buildings[sectorId] ?? []) {
+      if (hasBuildingIssue(hazardEvents, sectorId, buildingId) || random() >= maintenanceChance) {
+        continue;
+      }
+      const kinds = maintenanceKindsFor(buildingId);
+      hazardEvents.push({
+        id: nextHazardId++,
+        kind: kinds[Math.floor(random() * kinds.length)],
+        day: nextColony.day,
+        sectorId,
+        buildingId,
+      });
+    }
+  }
+
+  return {
+    ...nextColony,
+    hazardEvents,
+    hazardProgress,
+    hazardInterval,
+    randomSeed,
+    nextHazardId,
+  };
 }
 
 export function validateSave(value: unknown): ColonySave {
@@ -765,17 +1008,35 @@ export function validateSave(value: unknown): ColonySave {
     throw new Error('Save data is not an object.');
   }
   const rawSave = value as Partial<ColonySave> & { version?: number };
-  if (rawSave.version !== 1 && rawSave.version !== 2 && rawSave.version !== SAVE_VERSION) {
+  if (
+    rawSave.version !== 1 &&
+    rawSave.version !== 2 &&
+    rawSave.version !== 3 &&
+    rawSave.version !== SAVE_VERSION
+  ) {
     throw new Error(`Unsupported save version: ${String(rawSave.version)}.`);
   }
-  const save: Partial<ColonySave> = rawSave.version === 1 || rawSave.version === 2
-    ? {
+  const sourceVersion = rawSave.version;
+  const save: Partial<ColonySave> = sourceVersion === SAVE_VERSION
+    ? rawSave
+    : {
         ...rawSave,
         version: SAVE_VERSION,
-        lastFieldworkDay: rawSave.version === 1 ? 0 : rawSave.lastFieldworkDay,
-        buildingPlacements: migrateBuildingPlacements(rawSave.buildings),
-      }
-    : rawSave;
+        lastFieldworkDay: sourceVersion === 1 ? 0 : rawSave.lastFieldworkDay,
+        buildingPlacements:
+          sourceVersion === 1 || sourceVersion === 2
+            ? migrateBuildingPlacements(rawSave.buildings)
+            : rawSave.buildingPlacements,
+        hazardEvents: [],
+        hazardProgress: 0,
+        hazardInterval:
+          HAZARD_INTERVAL_MIN + (((rawSave.startingSector ?? 0) % 6) + 6) % 6,
+        randomSeed:
+          (((rawSave.startingSector ?? 0) + 1) * 0x9e37_79b1 +
+            (rawSave.day ?? 1)) >>>
+          0 || 1,
+        nextHazardId: 1,
+      };
   if (save.version !== SAVE_VERSION) {
     throw new Error(`Unsupported save version: ${String(save.version)}.`);
   }
@@ -794,6 +1055,11 @@ export function validateSave(value: unknown): ColonySave {
     !save.buildingPlacements ||
     typeof save.buildingPlacements !== 'object' ||
     Array.isArray(save.buildingPlacements) ||
+    !Array.isArray(save.hazardEvents) ||
+    typeof save.hazardProgress !== 'number' ||
+    typeof save.hazardInterval !== 'number' ||
+    typeof save.randomSeed !== 'number' ||
+    typeof save.nextHazardId !== 'number' ||
     typeof save.elapsedMs !== 'number' ||
     typeof save.lastFieldworkDay !== 'number' ||
     typeof save.paused !== 'boolean' ||
@@ -811,6 +1077,18 @@ export function validateSave(value: unknown): ColonySave {
     !sectorIds.has(save.currentSector) ||
     save.people < 1 ||
     save.day < 1 ||
+    !Number.isFinite(save.hazardProgress) ||
+    save.hazardProgress < 0 ||
+    !Number.isInteger(save.hazardInterval) ||
+    save.hazardInterval < HAZARD_INTERVAL_MIN ||
+    save.hazardInterval > HAZARD_INTERVAL_MAX ||
+    save.hazardProgress >= save.hazardInterval ||
+    !Number.isInteger(save.randomSeed) ||
+    save.randomSeed < 1 ||
+    save.randomSeed > 0xffff_ffff ||
+    !Number.isInteger(save.nextHazardId) ||
+    save.nextHazardId < 1 ||
+    new Set(save.unlockedSectors).size !== save.unlockedSectors.length ||
     !Number.isInteger(save.lastFieldworkDay) ||
     save.lastFieldworkDay! < 0 ||
     save.lastFieldworkDay! > save.day ||
@@ -833,6 +1111,75 @@ export function validateSave(value: unknown): ColonySave {
     ) {
       throw new Error('Save data contains invalid buildings.');
     }
+  }
+  const eventIds = new Set<number>();
+  const eventTargets = new Set<string>();
+  let environmentHazardCount = 0;
+  const hazardKinds: HazardKind[] = [
+    'meteorite-impact',
+    'dust-storm',
+    'solar-panel-maintenance',
+    'structural-decay',
+    'facility-maintenance',
+  ];
+  for (const rawEvent of save.hazardEvents as unknown[]) {
+    if (!rawEvent || typeof rawEvent !== 'object' || Array.isArray(rawEvent)) {
+      throw new Error('Save data contains invalid hazard events.');
+    }
+    const event = rawEvent as Record<string, unknown>;
+    if (
+      !Number.isInteger(event.id) ||
+      typeof event.id !== 'number' ||
+      event.id < 1 ||
+      event.id >= save.nextHazardId ||
+      eventIds.has(event.id) ||
+      !hazardKinds.includes(event.kind as HazardKind) ||
+      !Number.isInteger(event.day) ||
+      typeof event.day !== 'number' ||
+      event.day < 1 ||
+      event.day > save.day ||
+      (event.sectorId !== null &&
+        (typeof event.sectorId !== 'number' || !Number.isInteger(event.sectorId))) ||
+      (event.buildingId !== null &&
+        !BUILDINGS.some((building) => building.id === event.buildingId))
+    ) {
+      throw new Error('Save data contains invalid hazard events.');
+    }
+    eventIds.add(event.id);
+    if (event.kind === 'meteorite-impact' || event.kind === 'dust-storm') {
+      environmentHazardCount += 1;
+    }
+    if (event.kind === 'dust-storm') {
+      if (event.sectorId !== null || event.buildingId !== null) {
+        throw new Error('Save data contains invalid hazard targets.');
+      }
+      continue;
+    }
+    if (
+      typeof event.sectorId !== 'number' ||
+      !sectorIds.has(event.sectorId) ||
+      !save.unlockedSectors.includes(event.sectorId) ||
+      typeof event.buildingId !== 'string' ||
+      !(save.buildings[event.sectorId] ?? []).includes(event.buildingId as BuildingId)
+    ) {
+      throw new Error('Save data contains invalid hazard targets.');
+    }
+    const targetKey = `${event.sectorId}:${event.buildingId}`;
+    if (eventTargets.has(targetKey)) {
+      throw new Error('Save data contains duplicate building hazards.');
+    }
+    eventTargets.add(targetKey);
+    if (
+      (event.kind === 'solar-panel-maintenance' &&
+        !SOLAR_BUILDINGS.includes(event.buildingId as BuildingId)) ||
+      (event.kind === 'facility-maintenance' &&
+        !FACILITY_MAINTENANCE_COSTS[event.buildingId as BuildingId])
+    ) {
+      throw new Error('Save data contains invalid hazard types.');
+    }
+  }
+  if (environmentHazardCount > 1) {
+    throw new Error('Save data contains overlapping environment hazards.');
   }
   for (const [sectorId, placements] of Object.entries(save.buildingPlacements)) {
     const sectorBuildings = save.buildings[Number(sectorId)] ?? [];
