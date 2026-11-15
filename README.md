@@ -34,9 +34,11 @@ update; the current version does not make NASA API requests.
 
 The `Deploy to GitHub Pages` workflow builds and publishes the game whenever
 changes are pushed to `main`, or when started manually from the Actions tab.
-In the repository's **Settings → Pages**, set the build and deployment source
-to **GitHub Actions**. After the first successful workflow run, the site is
-available at `https://belo-ntuli.github.io/LunarFrontier/`.
+A repository admin must enable Pages once in **Settings → Pages**, with the
+build and deployment source set to **GitHub Actions**. The workflow grants its
+build job `pages: write` to configure the site and limits deployment
+permissions to the deploy job. After the first successful workflow run, the
+site is available at `https://belo-ntuli.github.io/LunarFrontier/`.
 
 ## Gameplay and development
 
