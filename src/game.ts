@@ -19,11 +19,29 @@ export interface Sector {
   longitude: number;
   description: string;
   terrain: string;
+  surfaceRelief: SectorRelief;
   unlockMetal: number;
   unlockRegolith: number;
   crewRequired: number;
   iceDeposits?: boolean;
 }
+
+export type SectorRelief =
+  | 'polar-ice-craters'
+  | 'polar-ridges'
+  | 'polar-craters'
+  | 'icy-uplands'
+  | 'volcanic-plain'
+  | 'wrinkle-ridges'
+  | 'volcanic-domes'
+  | 'sinuous-rille'
+  | 'volcanic-province'
+  | 'shadowed-uplands'
+  | 'cratered-highlands'
+  | 'ejecta-blanket'
+  | 'impact-basin'
+  | 'concentric-massif'
+  | 'shadowed-crater';
 
 export type BuildingId =
   | 'habitat'
@@ -103,6 +121,7 @@ export const SECTORS: Sector[] = [
     longitude: 0,
     description: 'A polar landing zone where permanently shadowed terrain may hold valuable water ice.',
     terrain: 'Polar highlands',
+    surfaceRelief: 'polar-ice-craters',
     unlockMetal: 24,
     unlockRegolith: 18,
     crewRequired: 3,
@@ -115,6 +134,7 @@ export const SECTORS: Sector[] = [
     longitude: 72,
     description: 'Rugged southern terrain with long shadows and challenging routes between ridges.',
     terrain: 'Rugged polar plain',
+    surfaceRelief: 'polar-ridges',
     unlockMetal: 28,
     unlockRegolith: 22,
     crewRequired: 4,
@@ -127,6 +147,7 @@ export const SECTORS: Sector[] = [
     longitude: 0,
     description: 'A high-latitude frontier with low-angle sunlight and cratered polar ground.',
     terrain: 'Polar highlands',
+    surfaceRelief: 'polar-craters',
     unlockMetal: 25,
     unlockRegolith: 20,
     crewRequired: 3,
@@ -139,6 +160,7 @@ export const SECTORS: Sector[] = [
     longitude: 72,
     description: 'A cold northern region where shadow, sunlight, and access shape every mission plan.',
     terrain: 'Icy uplands',
+    surfaceRelief: 'icy-uplands',
     unlockMetal: 30,
     unlockRegolith: 24,
     crewRequired: 4,
@@ -151,6 +173,7 @@ export const SECTORS: Sector[] = [
     longitude: -144,
     description: 'Broad volcanic plains offer open ground for routes, landing areas, and solar fields.',
     terrain: 'Basalt plain',
+    surfaceRelief: 'volcanic-plain',
     unlockMetal: 26,
     unlockRegolith: 20,
     crewRequired: 3,
@@ -162,6 +185,7 @@ export const SECTORS: Sector[] = [
     longitude: -72,
     description: 'Long ridges cross the plain, creating elevated views and uneven construction ground.',
     terrain: 'Ridge belt',
+    surfaceRelief: 'wrinkle-ridges',
     unlockMetal: 28,
     unlockRegolith: 22,
     crewRequired: 4,
@@ -173,6 +197,7 @@ export const SECTORS: Sector[] = [
     longitude: 0,
     description: 'Ancient volcanic domes reveal a story of lava, heat, and the Moon’s changing interior.',
     terrain: 'Volcanic upland',
+    surfaceRelief: 'volcanic-domes',
     unlockMetal: 30,
     unlockRegolith: 24,
     crewRequired: 4,
@@ -184,6 +209,7 @@ export const SECTORS: Sector[] = [
     longitude: 72,
     description: 'Winding channels mark a landscape shaped by flowing lava and collapsed tubes.',
     terrain: 'Rille country',
+    surfaceRelief: 'sinuous-rille',
     unlockMetal: 32,
     unlockRegolith: 26,
     crewRequired: 5,
@@ -195,6 +221,7 @@ export const SECTORS: Sector[] = [
     longitude: 144,
     description: 'A large volcanic province with varied plains and room for long-range exploration.',
     terrain: 'Volcanic terrane',
+    surfaceRelief: 'volcanic-province',
     unlockMetal: 30,
     unlockRegolith: 24,
     crewRequired: 4,
@@ -206,6 +233,7 @@ export const SECTORS: Sector[] = [
     longitude: 144,
     description: 'A northern transition region between sunlit highlands and crater shadows.',
     terrain: 'Northern uplands',
+    surfaceRelief: 'shadowed-uplands',
     unlockMetal: 34,
     unlockRegolith: 28,
     crewRequired: 5,
@@ -218,6 +246,7 @@ export const SECTORS: Sector[] = [
     longitude: -144,
     description: 'Bright, ancient highlands are heavily cratered and rich in geological history.',
     terrain: 'Highland crust',
+    surfaceRelief: 'cratered-highlands',
     unlockMetal: 32,
     unlockRegolith: 26,
     crewRequired: 4,
@@ -229,6 +258,7 @@ export const SECTORS: Sector[] = [
     longitude: -72,
     description: 'Layered ejecta and dusty deposits preserve evidence of dramatic impacts.',
     terrain: 'Impact deposits',
+    surfaceRelief: 'ejecta-blanket',
     unlockMetal: 34,
     unlockRegolith: 28,
     crewRequired: 5,
@@ -240,6 +270,7 @@ export const SECTORS: Sector[] = [
     longitude: 144,
     description: 'A broad impact landscape makes geology visible in its rings and fractured floor.',
     terrain: 'Basin floor',
+    surfaceRelief: 'impact-basin',
     unlockMetal: 36,
     unlockRegolith: 30,
     crewRequired: 5,
@@ -251,6 +282,7 @@ export const SECTORS: Sector[] = [
     longitude: -144,
     description: 'Concentric mountain rings frame a challenging route through steep lunar terrain.',
     terrain: 'Concentric massif',
+    surfaceRelief: 'concentric-massif',
     unlockMetal: 38,
     unlockRegolith: 32,
     crewRequired: 5,
@@ -262,6 +294,7 @@ export const SECTORS: Sector[] = [
     longitude: -72,
     description: 'A permanently shadowed crater demands careful planning for heat, light, and access.',
     terrain: 'Shadowed crater',
+    surfaceRelief: 'shadowed-crater',
     unlockMetal: 40,
     unlockRegolith: 34,
     crewRequired: 6,
