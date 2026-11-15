@@ -563,55 +563,68 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 .map-heading .eyebrow { font-size: 8px; }
 .map-heading h1 { margin: 4px 0 0; color: #e6edf5; font: 500 18px var(--display); letter-spacing: -.025em; }
 .map-coordinate { color: #76869a; font: 8px var(--mono); letter-spacing: .08em; white-space: nowrap; }
-.surface-panel { height: clamp(500px, calc(100vh - 320px), 700px); min-height: 500px; display: grid; grid-template-rows: 19% 1fr 30px; border-color: #394451; background: #282b30; }
+.surface-panel { height: clamp(500px, calc(100vh - 320px), 700px); min-height: 500px; display: grid; grid-template-rows: 62px 1fr 30px; border-color: #394451; background: #282b30; }
 .surface-sky { height: auto; min-height: 0; }
-.surface-moonlet { width: clamp(42px, 6vw, 72px); height: clamp(42px, 6vw, 72px); top: 20px; }
-.surface-grid { height: auto; min-height: 0; background: radial-gradient(ellipse at 51% 27%, #927657, #65503e 66%, #39383a); }
+.surface-sky, .surface-polar .surface-sky { display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid rgba(183,207,214,.22); background: linear-gradient(90deg, #26343c, #34454c 55%, #28363d); }
+.surface-grid { height: auto; min-height: 0; background: radial-gradient(ellipse at 50% 45%, #a9c1c6, #8ca6ad 72%, #718990); }
+.surface-label { position: static; }
+.surface-label .eyebrow { color: #f0bf74; font-size: 7px; }
+.surface-label h2 { display: none; }
+.surface-label p { color: #c1d0d2; font-size: 7px; }
+.surface-coordinate { position: static; color: #f0c77f; font-size: 7px; }
 .surface-illustration { width: 100%; height: 100%; position: absolute; inset: 0; }
+.surface-illustration.pixelated-map-source { opacity: 0; }
+.pixelated-map { width: 100%; height: 100%; position: absolute; z-index: 1; inset: 0; image-rendering: pixelated; pointer-events: none; }
 .surface-illustration text { font-family: var(--mono); text-anchor: middle; letter-spacing: 1.5px; }
-.map-ridge { fill: #48454a; stroke: #81786f; stroke-width: 3; }
-.distant-ridge { opacity: .8; }
-.map-ground { fill: url(#lunar-ground); }
-.map-crater { fill: #51483f; stroke: #ad8d68; stroke-width: 4; opacity: .72; }
-.map-crater-inner { fill: #75604c; stroke: #bb9a71; stroke-width: 2; opacity: .7; }
-.crater-one { transform: rotate(-17deg); transform-origin: 137px 370px; }
-.crater-two { transform: rotate(12deg); transform-origin: 862px 302px; }
-.landing-site ellipse { fill: rgba(40,34,29,.46); stroke: #c7a677; stroke-width: 3; }
+.map-ground { fill: #9db6bc; }
+.map-frost { fill: url(#map-frost); opacity: .72; }
+.map-grid { fill: url(#map-grid); opacity: .24; }
+.map-contour { fill: none; stroke: rgba(229,242,242,.23); stroke-width: 2; }
+.map-dark-ground { fill: #25353b; stroke: #4a636c; stroke-width: 4; }
+.map-rocks { fill: #33434a; stroke: #526870; stroke-width: 2; opacity: .8; }
+.map-rocks circle { fill: #44585e; stroke: #6a8084; stroke-width: 2; }
+.map-crater { fill: rgba(42,60,67,.53); stroke: #627d83; stroke-width: 5; opacity: .72; }
+.map-crater-inner { fill: rgba(68,91,99,.48); stroke: rgba(162,190,192,.55); stroke-width: 2; opacity: .75; }
+.base-clearing { fill: rgba(55,75,80,.12); }
+.landing-site ellipse { fill: rgba(40,34,29,.35); stroke: #ecd194; stroke-width: 3; stroke-dasharray: 6 5; }
 .landing-site circle { fill: #f3cb7c; stroke: #ffebba; stroke-width: 3; }
-.landing-site path { stroke: #ddbd86; stroke-width: 3; }
-.landing-site text, .map-resource-site text { fill: #efd6ac; font-size: 11px; }
-.map-route { fill: none; stroke: #d3b28a; stroke-width: 5; stroke-dasharray: 14 12; opacity: .48; }
-.map-survey-line { fill: none; stroke: rgba(222,198,161,.28); stroke-width: 2; stroke-dasharray: 7 11; }
-.map-resource-site circle { fill: #302f31; stroke: #d7bc91; stroke-width: 2; }
-.map-resource-site path { fill: none; stroke: #e5c992; stroke-width: 2.5; }
+.landing-site path { fill: none; stroke: #ddbd86; stroke-width: 3; }
+.landing-site text, .map-resource-site text { fill: #eff5ef; font-size: 11px; }
+.map-route { fill: none; stroke: #3a4b50; stroke-width: 5; stroke-dasharray: 2 11; stroke-linecap: round; opacity: .38; }
+.map-survey-line { fill: none; stroke: rgba(232,244,238,.36); stroke-width: 2; stroke-dasharray: 7 11; }
+.map-resource-site circle { fill: #34474e; stroke: #f0bf74; stroke-width: 2; }
+.map-resource-site path { fill: none; stroke: #ffd18a; stroke-width: 2.5; }
 .map-resource-site text { font-size: 9px; }
-.ice-resource-site circle { stroke: #8bdcf0; }
-.ice-resource-site path { stroke: #9ce7f3; }
-.ice-resource-site text { fill: #a4ddeb; }
-.colony-structure { filter: drop-shadow(0 6px 6px rgba(24,22,20,.42)); }
-.structure-shadow { fill: rgba(34,28,24,.42); }
-.landing-pad { fill: #66605a; stroke: #c3b39c; stroke-width: 2; }
-.habitat-dome { fill: #c2b8a4; stroke: #eee0c2; stroke-width: 3; }
-.small-dome { fill: #aeb8b5; stroke: #dce5da; }
-.habitat-window, .quarter-window { fill: #79d6e5; stroke: #e1fbff; stroke-width: 2; }
-.habitat-door { fill: #68594c; stroke: #edcc93; stroke-width: 2; }
-.quarter-module { fill: #aba99c; stroke: #e0d4bd; stroke-width: 2; }
-.quarter-roof { fill: #797a76; stroke: #e0d4bd; stroke-width: 2; }
-.habitat-tunnel { fill: none; stroke: #d9c8a9; stroke-width: 8; }
+.ice-resource-site circle { stroke: #a9e3ed; }
+.ice-resource-site path { stroke: #c3f1f3; }
+.ice-resource-site text { fill: #e4f6f3; }
+.colony-structure { filter: drop-shadow(0 5px 3px rgba(13,24,29,.52)); }
+.structure-shadow { fill: rgba(15,26,30,.4); }
+.landing-pad { fill: rgba(58,74,78,.82); stroke: #9bb3b7; stroke-width: 3; }
+.habitat-dome { fill: #25343a; stroke: #93a8a8; stroke-width: 4; }
+.habitat-window, .quarter-window { fill: #ffc96c; stroke: #ffe4a0; stroke-width: 2; }
+.habitat-door { fill: #19272c; stroke: #d9a353; stroke-width: 2; }
+.quarter-module { fill: #2b383c; stroke: #829699; stroke-width: 3; }
+.habitat-tunnel { fill: none; stroke: #35474c; stroke-width: 9; }
+.building-room { fill: #384246; stroke: #738589; stroke-width: 2; }
+.building-wall { fill: none; stroke: #172328; stroke-width: 5; }
+.warm-window { fill: none; stroke: #ffc46b; stroke-width: 4; stroke-linecap: round; filter: drop-shadow(0 0 4px rgba(255,176,68,.65)); }
+.facility-shell { fill: #1d292e; stroke: #53666b; stroke-width: 4; }
+.facility-floor { fill: #3c4647; stroke: #77877f; stroke-width: 2; }
 .habitat-beacon { fill: #ffd475; stroke: #fff0c4; stroke-width: 2; }
-.structure-label { fill: #fff0d0; font-size: 12px; paint-order: stroke; stroke: #342d27; stroke-width: 4px; stroke-linejoin: round; }
-.solar-frame { fill: none; stroke: #ddd1b9; stroke-width: 4; }
-.solar-panel { fill: #315a70; stroke: #b6dce2; stroke-width: 3; }
-.solar-cell-line { fill: none; stroke: #83b9cb; stroke-width: 1.5; }
-.greenhouse-shell { fill: #668d7c; stroke: #d2e6c6; stroke-width: 3; }
-.greenhouse-rib { fill: none; stroke: #cce4bd; stroke-width: 3; }
-.facility-door, .rig-housing { fill: #bea57c; stroke: #eee0bd; stroke-width: 2; }
-.rig-frame, .recycler-pipe { fill: none; stroke: #e3d2b5; stroke-width: 4; }
-.recycler-tank { fill: #7897a4; stroke: #d4ebed; stroke-width: 3; }
-.tank-secondary { fill: #8e9e9c; }
-.mine-hill { fill: #76644f; stroke: #c2a37d; stroke-width: 3; }
-.mine-track { fill: none; stroke: #e2c99e; stroke-width: 4; }
-.mine-ore { fill: #e6b980; stroke: #ffe4b9; stroke-width: 2; }
+.structure-label { display: none; }
+.solar-frame { fill: #ddd1b9; stroke: #f0dfc0; stroke-width: 3; }
+.solar-panel { fill: #284f61; stroke: #9bc2c7; stroke-width: 3; }
+.solar-cell-line { fill: none; stroke: #79aeb9; stroke-width: 1.5; }
+.greenhouse-shell { fill: #526d58; stroke: #a4bc87; stroke-width: 2; }
+.greenhouse-rib { fill: none; stroke: #a4c88a; stroke-width: 4; }
+.facility-door, .rig-housing { fill: #b58b51; stroke: #eed29b; stroke-width: 2; }
+.rig-frame, .recycler-pipe { fill: none; stroke: #b8c5bd; stroke-width: 4; }
+.recycler-tank { fill: #536b70; stroke: #bdc9bc; stroke-width: 3; }
+.tank-secondary { fill: #71817c; }
+.mine-hill { fill: #4b5854; stroke: #849186; stroke-width: 3; }
+.mine-track { fill: none; stroke: #d2a15b; stroke-width: 4; }
+.mine-ore { fill: #f2bf65; stroke: #ffe1a0; stroke-width: 2; }
 .surface-bottom { font-size: 7px; }
 .map-instructions { padding: 9px 2px 0; display: flex; justify-content: space-between; gap: 9px; color: #78889a; font: 7px var(--mono); letter-spacing: .07em; }
 .sector-map-footer { margin-top: 11px; display: grid; grid-template-columns: minmax(0,1.3fr) minmax(245px,1fr); align-items: stretch; gap: 11px; }
@@ -674,7 +687,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 }
 
 @media (max-width: 900px) {
-  .sector-command-layout { grid-template-columns: minmax(190px, .7fr) minmax(400px, 1.5fr); }
+  .sector-command-layout { grid-template-columns: minmax(0, 1fr); }
   .management-panel { grid-column: 1 / -1; position: static; max-height: none; }
   .management-panel .building-list { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
   .management-panel .habitat-status, .management-panel .field-note { max-width: 680px; }
@@ -750,7 +763,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
   .resource-mini-copy strong { font-size: 10px; }
   .resource-mini-copy small { font-size: 7px; }
   .management-panel .building-list { grid-template-columns: 1fr; }
-  .surface-panel { height: min(58svh, 500px); min-height: 410px; grid-template-rows: 20% 1fr 34px; }
+  .surface-panel { height: min(58svh, 500px); min-height: 410px; grid-template-rows: 56px 1fr 34px; }
   .surface-bottom { padding: 0 7px; gap: 5px; font-size: 6px; letter-spacing: 0; }
   .worksite-marker { width: clamp(135px, 39%, 185px); }
   .prospect-site { left: 2%; bottom: 7%; }
