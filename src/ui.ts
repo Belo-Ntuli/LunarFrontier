@@ -884,6 +884,7 @@ function renderPixelatedSurfaceMap(): void {
   const toPlacementCanvasPoint = (element: Element): { x: number; y: number } | null => {
     const point = toCanvasPoint(element);
     if (!point) return null;
+    // Invert the canvas camera so saved view coordinates land under the user's click.
     return {
       x: cameraX + (point.x - width / 2) / zoom,
       y: cameraY + (point.y - height / 2) / zoom,
