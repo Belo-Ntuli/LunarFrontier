@@ -1,4 +1,9 @@
-import { MoonScene } from './moon-scene';
+import {
+  DEFAULT_GLOBE_ZOOM,
+  MAX_GLOBE_ZOOM,
+  MIN_GLOBE_ZOOM,
+  MoonScene,
+} from './moon-scene';
 import {
   BUILDINGS,
   DAY_LENGTH_MS,
@@ -11,6 +16,7 @@ import {
   canPerformFieldwork,
   canUnlock,
   createColony,
+  getDailyResourceFlows,
   getDefaultBuildingPlacement,
   getSector,
   isFirstBuildFree,
@@ -32,6 +38,7 @@ const loadResult = loadColony();
 let colony: ColonySave | null = loadResult.colony;
 let screen: Screen = 'atlas';
 let inspectedSectorId = colony?.currentSector ?? 0;
+let selectedInspectorSectorId: number | null = null;
 let sectorInspectorCollapsed = false;
 let moonScene: MoonScene | null = null;
 let saveMessage = loadResult.error;
@@ -45,6 +52,7 @@ const MIN_MAP_ZOOM = 0.75;
 const MAX_MAP_ZOOM = 2.4;
 const MAP_ZOOM_STEP = 0.15;
 let mapZoom = BASE_MAP_ZOOM;
+let globeZoomLevel = DEFAULT_GLOBE_ZOOM;
 let crewAnimationFrame: number | null = null;
 
 interface CrewStop {
@@ -118,27 +126,6 @@ const BUILDING_ICONS: Record<BuildingId, string> = {
   'deep-rock-mining': '⬡',
 };
 
-const resourceRate = (resource: ResourceKey): number => {
-  if (!colony) return 0;
-  const activeColony = colony;
-  const buildingIds = Object.values(activeColony.buildings).flat();
-  const production = buildingIds.reduce(
-    (total, id) => total + (BUILDINGS.find((building) => building.id === id)?.production[resource] ?? 0),
-    0,
-  );
-  const buildingUse = buildingIds.reduce(
-    (total, id) => total + (BUILDINGS.find((building) => building.id === id)?.consumption[resource] ?? 0),
-    0,
-  );
-  const crewUse =
-    resource === 'water' || resource === 'food' || resource === 'oxygen'
-      ? activeColony.people
-      : resource === 'energy'
-        ? Math.ceil(activeColony.people / 2)
-        : 0;
-  return production - buildingUse - crewUse;
-};
-
 function esc(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -148,13 +135,18 @@ function esc(value: string): string {
     .replaceAll("'", '&#039;');
 }
 
+function formatResourceAmount(amount: number): string {
+  return Number(amount.toFixed(2)).toString();
+}
+
 function resourceMarkup(): string {
   if (!colony) return '';
   const activeColony = colony;
+  const { production, consumption } = getDailyResourceFlows(activeColony);
   return RESOURCE_ORDER.map((resource) => {
     const info = RESOURCE_INFO[resource];
-    const rate = resourceRate(resource);
-    const rateText = `${rate >= 0 ? '+' : ''}${rate}/day`;
+    const rate = production[resource] - consumption[resource];
+    const rateText = `${rate >= 0 ? '+' : ''}${formatResourceAmount(rate)}/day`;
     const alertClass =
       (resource === 'water' || resource === 'food' || resource === 'oxygen') &&
       activeColony.resources[resource] < activeColony.people * 2
@@ -162,7 +154,7 @@ function resourceMarkup(): string {
         : '';
     return `<div class="resource-chip${alertClass}" title="${info.label}: ${rateText}">
       <span class="resource-glyph" style="--resource-color:${info.color}">${info.icon}</span>
-      <span class="resource-value">${Math.floor(activeColony.resources[resource])}</span>
+      <span class="resource-value">${formatResourceAmount(activeColony.resources[resource])}</span>
       <span class="resource-name">${info.label}</span>
       <span class="resource-rate ${rate < 0 ? 'rate-negative' : 'rate-positive'}">${rateText}</span>
     </div>`;
@@ -267,6 +259,7 @@ function sectorInspectorMarkup(sector: Sector): string {
     <h2>${esc(sector.name)}</h2>
     <p class="sector-description">${esc(sector.description)}</p>
     <div class="inspector-divider"></div>
+    ${sectorProductionModifiersMarkup(sector)}
     ${!colony
       ? `<div class="landing-hint"><span class="hint-icon">⌖</span><p>Choose this sector for your first outpost. You’ll land with <strong>7 crew</strong> and a basic habitat.</p></div>
          <button class="button button-primary button-wide" data-action="start-colony" data-sector="${sector.id}">LAND HERE <span>↗</span></button>`
@@ -284,8 +277,23 @@ function sectorInspectorMarkup(sector: Sector): string {
     }`;
 }
 
+function sectorProductionModifiersMarkup(sector: Sector): string {
+  const modifiers = RESOURCE_ORDER.flatMap((resource) => {
+    const modifier = sector.productionModifiers[resource];
+    if (modifier === undefined || modifier === 0) return [];
+    return [`<li class="sector-modifier ${modifier > 0 ? 'modifier-positive' : 'modifier-negative'}">
+      <span>${esc(RESOURCE_INFO[resource].label)}</span>
+      <strong>${modifier > 0 ? '+' : ''}${modifier}%</strong>
+    </li>`];
+  }).join('');
+  return `<section class="sector-modifiers" aria-label="Building production modifiers">
+    <div class="sector-modifiers-heading"><span>BUILDING PRODUCTION</span><span>DAILY</span></div>
+    <ul class="sector-modifier-list">${modifiers}</ul>
+    <p class="sector-modifier-note">Applied to each building's base output here; modifiers do not compound.</p>
+  </section>`;
+}
+
 function globeScreenMarkup(): string {
-  const currentSector = colony ? getSector(colony.currentSector) : null;
   return appShell(`<main class="atlas-layout ${sectorInspectorCollapsed ? 'is-inspector-collapsed' : ''}">
     <aside class="atlas-sidebar panel">
       <div class="panel-heading">
@@ -302,6 +310,11 @@ function globeScreenMarkup(): string {
     <section class="globe-stage" aria-label="Three-dimensional lunar atlas">
       <div class="stage-label"><span class="live-dot"></span> LUNAR SURFACE · 15 SECTORS</div>
       <div class="globe-hint"><span>↔</span> DRAG TO ROTATE</div>
+      <div class="globe-zoom-controls" role="group" aria-label="Lunar globe zoom controls">
+        <button type="button" data-action="globe-zoom-out" aria-label="Zoom out from Moon" ${globeZoomLevel <= MIN_GLOBE_ZOOM ? 'disabled' : ''}>−</button>
+        <output class="globe-zoom-level" aria-label="Globe zoom level">${Math.round(globeZoomLevel * 100)}%</output>
+        <button type="button" data-action="globe-zoom-in" aria-label="Zoom in on Moon" ${globeZoomLevel >= MAX_GLOBE_ZOOM ? 'disabled' : ''}>+</button>
+      </div>
       <div class="moon-mount" id="moon-mount"></div>
       <div class="globe-orbit orbit-one"></div><div class="globe-orbit orbit-two"></div>
       <div class="globe-caption"><span class="caption-line"></span><span>MOON · 1:1 SCALE MODEL</span></div>
@@ -314,8 +327,7 @@ function globeScreenMarkup(): string {
           aria-label="${sectorInspectorCollapsed ? 'Show' : 'Hide'} sector details"><span aria-hidden="true">${sectorInspectorCollapsed ? '‹' : '›'}</span></button>
       </div>
       <div class="inspector-content" id="sector-inspector-content">
-        ${sectorInspectorMarkup(getSector(inspectedSectorId))}
-        ${currentSector ? `<div class="current-sector-label"><span class="live-dot"></span> CURRENT OUTPOST <strong>${esc(currentSector.name)}</strong></div>` : ''}
+        ${sectorInspectorContentMarkup(selectedInspectorSectorId)}
       </div>
     </aside>
   </main>`);
@@ -344,8 +356,15 @@ function buildingCardMarkup(buildingId: BuildingId): string {
       (colony.resources.metal >= building.metal &&
         colony.resources.regolith >= building.regolith)
     : false;
+  const sectorModifiers = colony
+    ? getSector(colony.currentSector).productionModifiers
+    : {};
   const rates = Object.entries(building.production)
-    .map(([resource, amount]) => `+${amount} ${RESOURCE_INFO[resource as ResourceKey].label}/day`)
+    .map(([resource, amount]) => {
+      const key = resource as ResourceKey;
+      const effectiveAmount = amount * (1 + (sectorModifiers[key] ?? 0) / 100);
+      return `+${formatResourceAmount(effectiveAmount)} ${RESOURCE_INFO[key].label}/day`;
+    })
     .join(' · ');
   const costs = firstBuildFree
     ? `<span class="cost-free">FIRST ONE FREE</span><span>Then ${building.metal} Metal</span><span>Then ${building.regolith} Regolith</span>`
@@ -370,17 +389,18 @@ function buildingCardMarkup(buildingId: BuildingId): string {
 
 function sectorResourceMarkup(): string {
   if (!colony) return '';
+  const { production, consumption } = getDailyResourceFlows(colony);
   return RESOURCE_ORDER.map((resource) => {
     const info = RESOURCE_INFO[resource];
-    const amount = Math.floor(colony!.resources[resource]);
-    const rate = resourceRate(resource);
-    const rateLabel = `${rate > 0 ? '+' : ''}${rate}/day`;
+    const amount = colony!.resources[resource];
+    const rate = production[resource] - consumption[resource];
+    const rateLabel = `${rate > 0 ? '+' : ''}${formatResourceAmount(rate)}/day`;
     const urgent =
       (resource === 'water' || resource === 'food' || resource === 'oxygen') &&
       amount < colony!.people * 3;
     return `<div class="resource-mini ${urgent ? 'resource-alert' : ''}" title="${info.label}: ${rateLabel} colony-wide">
       <i style="--resource-color:${info.color}">${info.icon}</i>
-      <span class="resource-mini-copy"><strong>${amount}</strong><small>${info.label}</small></span>
+      <span class="resource-mini-copy"><strong>${formatResourceAmount(amount)}</strong><small>${info.label}</small></span>
       <em class="${rate < 0 ? 'rate-negative' : ''}">${rateLabel}</em>
     </div>`;
   }).join('');
@@ -1217,9 +1237,13 @@ function hasSavedData(): boolean {
 function renderInspector(): void {
   const target = document.querySelector<HTMLElement>('.inspector-content');
   if (!target) return;
-  const sector = getSector(inspectedSectorId);
+  target.innerHTML = sectorInspectorContentMarkup(selectedInspectorSectorId);
+}
+
+function sectorInspectorContentMarkup(sectorId: number | null): string {
+  if (sectorId === null) return '';
   const current = colony ? getSector(colony.currentSector) : null;
-  target.innerHTML = `${sectorInspectorMarkup(sector)}${current ? `<div class="current-sector-label"><span class="live-dot"></span> CURRENT OUTPOST <strong>${esc(current.name)}</strong></div>` : ''}`;
+  return `${sectorInspectorMarkup(getSector(sectorId))}${current ? `<div class="current-sector-label"><span class="live-dot"></span> CURRENT OUTPOST <strong>${esc(current.name)}</strong></div>` : ''}`;
 }
 
 function toggleSectorInspector(): void {
@@ -1240,6 +1264,7 @@ function toggleSectorInspector(): void {
 
 function inspectSector(sectorId: number, focusGlobe = true): void {
   inspectedSectorId = sectorId;
+  selectedInspectorSectorId = sectorId;
   document.querySelectorAll<HTMLElement>('.sector-row').forEach((row) => {
     const selected = Number(row.dataset.sector) === sectorId;
     row.classList.toggle('is-selected', selected);
@@ -1319,6 +1344,17 @@ function setMapZoom(nextZoom: number): void {
   if (zoomIn) zoomIn.disabled = mapZoom >= MAX_MAP_ZOOM;
   const zoomReset = document.querySelector<HTMLButtonElement>('[data-action="map-zoom-reset"]');
   if (zoomReset) zoomReset.disabled = mapZoom === BASE_MAP_ZOOM;
+}
+
+function updateGlobeZoomControls(zoomLevel: number): void {
+  globeZoomLevel = zoomLevel;
+  const zoomOutput = document.querySelector<HTMLOutputElement>('.globe-zoom-level');
+  if (zoomOutput) zoomOutput.value = `${Math.round(globeZoomLevel * 100)}%`;
+
+  const zoomOut = document.querySelector<HTMLButtonElement>('[data-action="globe-zoom-out"]');
+  if (zoomOut) zoomOut.disabled = globeZoomLevel <= MIN_GLOBE_ZOOM;
+  const zoomIn = document.querySelector<HTMLButtonElement>('[data-action="globe-zoom-in"]');
+  if (zoomIn) zoomIn.disabled = globeZoomLevel >= MAX_GLOBE_ZOOM;
 }
 
 function placementAt(clientX: number, clientY: number): BuildingPlacement | null {
@@ -1404,6 +1440,12 @@ function handleAction(button: HTMLElement): void {
     case 'map-zoom-reset':
       setMapZoom(BASE_MAP_ZOOM);
       break;
+    case 'globe-zoom-in':
+      moonScene?.zoomIn();
+      break;
+    case 'globe-zoom-out':
+      moonScene?.zoomOut();
+      break;
     case 'toggle-pause':
       if (colony && !colony.failed) {
         colony = { ...colony, paused: !colony.paused };
@@ -1421,7 +1463,10 @@ function handleAction(button: HTMLElement): void {
       placementCursor = null;
       starterTutorialVisible = false;
       screen = 'atlas';
-      if (colony) inspectedSectorId = colony.currentSector;
+      if (colony) {
+        inspectedSectorId = colony.currentSector;
+        selectedInspectorSectorId = inspectedSectorId;
+      }
       render();
       break;
     case 'new-colony':
@@ -1431,6 +1476,7 @@ function handleAction(button: HTMLElement): void {
       screen = 'atlas';
       colony = null;
       inspectedSectorId = 0;
+      selectedInspectorSectorId = null;
       render();
       break;
     case 'build': {
@@ -1502,15 +1548,13 @@ function render(): void {
           (sectorId) => {
             inspectSector(sectorId, false);
           },
-          (sectorId) => {
-            if (sectorId !== null) {
-              inspectedSectorId = sectorId;
-              renderInspector();
-            }
-          },
+          globeZoomLevel,
+          updateGlobeZoomControls,
         );
       } catch {
         mount.innerHTML = '<div class="scene-error"><span>⚠</span><strong>3D atlas unavailable</strong><p>Try a WebGL-enabled browser to explore the lunar globe. Use the sector list to continue.</p></div>';
+        const zoomControls = document.querySelector<HTMLElement>('.globe-zoom-controls');
+        if (zoomControls) zoomControls.hidden = true;
       }
     }
   } else {
@@ -1601,7 +1645,7 @@ export function startApplication(root: HTMLDivElement): void {
     const button = target.closest<HTMLElement>('[data-action="inspect-sector"]');
     if (!button) return;
     const id = Number(button.dataset.sector);
-    if (!Number.isNaN(id) && id !== inspectedSectorId) inspectSector(id);
+    if (!Number.isNaN(id) && id !== inspectedSectorId) moonScene?.focusSector(id);
   });
 
   document.addEventListener('visibilitychange', () => {

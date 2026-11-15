@@ -44,13 +44,16 @@ The initial resource rates, building actions, exploration costs, and survival/fa
 - Animate sunlight around the Moon's local axis over each 45-second in-game day. Keep the light attached to the globe so the day/night pattern stays aligned with its terrain when dragged or refocused, independent of the camera. The cycle advances only while the simulation is running and visible, and pauses with the simulation.
 - Show visible, softly twinkling star dots in the space background; keep them static when reduced-motion is requested.
 - Display a numbered name bubble slightly above each sector on the 3D globe, with a leader line ending in a surface dot. Labels follow the globe's orientation and are occluded on its far side.
+- After a landing sector is chosen, show a green home symbol on each unlocked sector and a black lock symbol on each locked sector. Hide these status symbols before the player chooses a landing sector.
 - Keep all sector landmasses the same base lunar color; use a clear surface tint to distinguish an unlocked, hovered, or selected region.
 - Preserve the existing sector centers and boundary shapes when changing terrain appearance.
 - Selecting a sector from the adjacent list must remain available as an alternative to interacting with the globe.
 - Selecting or keyboard-focusing a sector in the mission map smoothly rotates the globe to bring that sector into view; respect reduced-motion preferences.
+- Set the 3D globe's default zoom to 80 percent and allow zoom changes only through accessible on-screen plus and minus buttons.
 - The sector details panel can be collapsed and reopened with an accessible arrow control; the mission map remains visible.
+- Leave sector details blank until a sector is explicitly selected; hovering or focusing a sector must not change the details.
 - From 901px and wider, keep the mission map, globe, and sector details in three columns, with compact sidebars around 160–205px wide and controls contained within their panels. At narrower widths, the details panel may stack below the map and globe.
-- Highlight the selected sector in blue in both the sector list and the 3D overview.
+- Tint unlocked or landed surface regions green even when selected, and keep selected locked regions blue; show unlocked status in green in the sector list.
 - Dragging rotates the Moon. The sector list remains an accessible alternative to pointer-based globe selection.
 - Show which sector is selected, unlocked, or locked with visually distinct states.
 - A sector should remain identifiable in both the globe overview and the 2D gameplay view.
@@ -81,12 +84,12 @@ Names are reproduced as supplied. Do not merge similarly named areas (for exampl
 
 ### 4.3 Sector interaction
 
-- **Hover/focus:** Highlight the sector on the surface and display its details. Hovering a globe sector slightly raises its interior while keeping the ravine boundary low.
+- **Hover/focus:** Hovering highlights the sector and slightly raises its interior while keeping the ravine boundary low; it does not change the details panel. Keyboard focus may rotate the globe but does not change details.
 - **Locked sector details:** Show that the sector is locked and state the required materials and people needed to explore it.
 - **Unlocked sector details:** Show its status and provide a way to enter it.
-- **Select/click:** Selecting the starting sector begins the colony there. Selecting an unlocked sector enters its 2D gameplay view.
+- **Select/click:** Selecting a sector updates its details. Selecting the starting sector begins the colony there; selecting an unlocked sector enters its 2D gameplay view. Keyboard activation and touch selection have the same behavior.
 - Selecting a sector directly on the globe updates its details without recreating the scene; keep the camera focused on that sector.
-- **Accessibility:** Hover effects must have equivalent keyboard-focus and touch/select interactions; essential information cannot be hover-only.
+- **Accessibility:** Sector details must be available through click, touch, or keyboard activation; essential information cannot be hover-only.
 - **Motion:** Sector lift and camera transitions should be brief and should not be required to understand state. Respect reduced-motion preferences.
 
 ## 5. New colony and starting state
@@ -155,6 +158,7 @@ The first colony-wide placement of Crew homes, Solar panels, Soil farm, and Ice 
 | Deep mine | 32 | 26 | +8 Metal, +4 Lunar regolith | 8 Energy |
 
 The requested Living Quarters option is already represented by the existing Crew homes facility and is not duplicated. New facility rates are balancing choices scaled against crew upkeep (1 Water, Food, and Oxygen per crew member per day, and 1 Energy per two crew members rounded up). The Soil farm uses less water and produces less food than the Water-grown farm. The Bug food maker uses food to make a larger amount of food.
+Listed daily outputs are base facility rates before sector modifiers; facility cards show the effective output in the current sector.
 
 ### 6.2 Surface fieldwork
 
@@ -189,6 +193,28 @@ Use the following six resource names consistently in UI, saved data, and game lo
 6. Lunar regolith
 
 There is no inventory capacity limit in the current playable version. The starting habitat and facilities above are the complete initial resource economy; do not silently introduce additional core resources or costs.
+
+### 7.3 Sector building-production modifiers
+
+Each sector adjusts the amount of each resource produced by buildings located there. Apply the listed percentage to each building's base daily output in that sector, then add the resulting building outputs across the colony. Modifiers affect newly produced amounts only; they do not compound against stored resources or across days. They do not change crew consumption, building operating use, construction costs, or fieldwork yields. Fractional resource amounts are retained to two decimal places.
+
+| Sector | Building-production modifiers |
+|---|---|
+| South Pole | +25% Water, -20% Metal |
+| Southern polar field | +20% Water, +25% Oxygen |
+| North Pole | +40% Water, -40% Lunar regolith |
+| Northern ice fields | +15% Water |
+| Basalt Plains | +40% Metal, -40% Lunar regolith |
+| Wrinkle Ridges | +45% Metal, -40% Water |
+| Volcanic Domes | +25% Food, +10% Metal |
+| Sinuous Rilles | +50% Energy, -50% Lunar regolith |
+| Procellarum Terrane | +55% Metal, -50% Oxygen |
+| Northern poles | +20% Water |
+| Lunar Highlands | +15% Lunar regolith, +20% Oxygen, -35% Water |
+| Basin Blankets | +25% Metal, +20% Lunar regolith |
+| Impact Basin | +30% Metal, +20% Lunar regolith, -35% Energy |
+| Massif concentric mountain | +55% Lunar regolith, +50% Metal, -45% Oxygen, -45% Water |
+| Deep shadowed crater | +45% Water, +40% Metal, -65% Energy |
 
 ## 8. Sector unlocking and expansion
 
@@ -291,5 +317,9 @@ The initial implementation is ready for review when all of the following are tru
 29. Background stars twinkle independently at a gentle, staggered pace and remain static for users who prefer reduced motion.
 30. Each visible sector on the 3D globe has a raised bubble showing its two-digit number and larger name, without a "Sector" prefix, connected to the sector by a line and surface dot; labels follow globe rotation and do not prevent sector selection.
 31. From 901px and wider, the atlas keeps the mission map, globe, and sector details in three columns, with compact sidebars around 160–205px wide and controls contained within them; narrower layouts can stack sector details beneath the map and globe.
+32. The 3D globe starts at 80 percent zoom and can be zoomed only with accessible on-screen plus and minus buttons; the controls stop at the supported minimum and maximum.
+33. The sector details content starts blank and changes only after explicit sector selection by click, touch, or keyboard activation; hovering or keyboard focus alone never changes the details.
+34. Selecting any sector displays its building-production modifiers prominently in readable text in the sector details column. Each modifier applies to that sector's building output each day only; it does not compound across turns or affect fieldwork, costs, operating use, or crew consumption.
+35. Once a landing sector is chosen, unlocked or landed sectors have a green highlight and green home symbol on the globe, and locked sectors have a black lock symbol. Neither status symbol appears before landing is chosen.
 
 The economy, day length, and exploration costs are implemented as the initial values in this specification and should be adjusted only with corresponding UI, tests, and documentation updates.

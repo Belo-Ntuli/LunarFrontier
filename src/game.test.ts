@@ -34,6 +34,26 @@ describe('Lunar Frontier game rules', () => {
     });
   });
 
+  it('uses the specified building-production modifiers for every sector', () => {
+    expect(SECTORS.map(({ name, productionModifiers }) => [name, productionModifiers])).toEqual([
+      ['South Pole', { water: 25, metal: -20 }],
+      ['Southern polar field', { water: 20, oxygen: 25 }],
+      ['North Pole', { water: 40, regolith: -40 }],
+      ['Northern ice fields', { water: 15 }],
+      ['Basalt Plains', { metal: 40, regolith: -40 }],
+      ['Wrinkle Ridges', { metal: 45, water: -40 }],
+      ['Volcanic Domes', { food: 25, metal: 10 }],
+      ['Sinuous Rilles', { energy: 50, regolith: -50 }],
+      ['Procellarum Terrane', { metal: 55, oxygen: -50 }],
+      ['Northern poles', { water: 20 }],
+      ['Lunar Highlands', { regolith: 15, oxygen: 20, water: -35 }],
+      ['Basin Blankets', { metal: 25, regolith: 20 }],
+      ['Impact Basin', { metal: 30, regolith: 20, energy: -35 }],
+      ['Massif concentric mountain', { regolith: 55, metal: 50, oxygen: -45, water: -45 }],
+      ['Deep shadowed crater', { water: 45, metal: 40, energy: -65 }],
+    ]);
+  });
+
   it('charges the listed cost for each repeat facility placement', () => {
     const colony = createColony(4);
     const first = buildStructure(colony, 'medical-bay');
@@ -106,6 +126,24 @@ describe('Lunar Frontier game rules', () => {
 
     expect(advanceDay(colony).resources.energy).toBe(106);
     expect(validateSave(colony)).toEqual(colony);
+  });
+
+  it('applies sector modifiers to base building output each day without compounding', () => {
+    let colony = createColony(0);
+    colony = buildStructure(colony, 'ice-extractor');
+    colony = buildStructure(colony, 'deep-rock-mining');
+
+    const firstDay = advanceDay(colony);
+    const secondDay = advanceDay(firstDay);
+
+    expect(firstDay.resources).toMatchObject({
+      water: 76.75,
+      metal: 84.4,
+    });
+    expect(secondDay.resources).toMatchObject({
+      water: 83.5,
+      metal: 90.8,
+    });
   });
 
   it('builds crew homes without changing the colony population', () => {
