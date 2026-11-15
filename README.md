@@ -25,6 +25,14 @@ npm run dev
 Open the local URL printed by Vite. Player progress is saved in the current
 browser's local storage; the game does not require an account or backend.
 
+## Host on GitHub Pages
+
+The `Deploy to GitHub Pages` workflow builds and publishes the game whenever
+changes are pushed to `main`, or when started manually from the Actions tab.
+In the repository's **Settings → Pages**, set the build and deployment source
+to **GitHub Actions**. After the first successful workflow run, the site is
+available at `https://belo-ntuli.github.io/LunarFrontier/`.
+
 ## Gameplay and development
 
 - [GAME_SPEC.md](./GAME_SPEC.md) describes the gameplay, current balancing
