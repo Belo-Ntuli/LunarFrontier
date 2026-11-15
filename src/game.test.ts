@@ -829,7 +829,6 @@ describe('Lunar Frontier game rules', () => {
     const restored = validateSave({ ...versionOneSave, version: 1 });
 
     expect(restored.version).toBe(8);
-    expect(restored.version).toBe(6);
     expect(restored.lastFieldworkDay).toBe(0);
     expect(restored.people).toBe(7);
     expect(restored.buildings[4]).toEqual(['habitat']);
@@ -847,7 +846,6 @@ describe('Lunar Frontier game rules', () => {
     const restored = validateSave({ ...versionThreeSave, version: 3 });
 
     expect(restored.version).toBe(8);
-    expect(restored.version).toBe(6);
     expect(restored.hazardEvents).toEqual([]);
     expect(restored.hazardProgress).toBe(0);
     expect(restored.hazardInterval).toBe(14);

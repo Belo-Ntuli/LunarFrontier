@@ -563,7 +563,6 @@ const FACILITY_MAINTENANCE_COSTS: Partial<
 };
 
 const SOLAR_BUILDINGS: BuildingId[] = ['solar-panels'];
-const SOLAR_BUILDINGS: BuildingId[] = ['solar-panels'];
 
 function nextRandom(seed: number): { value: number; seed: number } {
   let next = seed >>> 0;
@@ -1222,21 +1221,11 @@ export function validateSave(value: unknown): ColonySave {
   if (
     (presentHazardFields !== 0 && presentHazardFields !== hazardFields.length) ||
     (sourceVersion === SAVE_VERSION && presentHazardFields !== hazardFields.length)
-  const sourceVersion = rawSave.version;
-  if (
-    sourceVersion !== 1 &&
-    sourceVersion !== 2 &&
-    sourceVersion !== 3 &&
-    sourceVersion !== 4 &&
-    sourceVersion !== 5 &&
-    sourceVersion !== SAVE_VERSION
   ) {
-    throw new Error('Save data is incomplete or invalid.');
+    throw new Error('Save data contains incomplete or invalid hazard state.');
   }
 
   const hasHazardState = presentHazardFields === hazardFields.length;
-    throw new Error(`Unsupported save version: ${String(sourceVersion)}.`);
-  }
   const save: Partial<ColonySave> =
     sourceVersion === SAVE_VERSION
       ? rawSave
@@ -1270,35 +1259,6 @@ export function validateSave(value: unknown): ColonySave {
                 nextHazardId: 1,
               }
             : {}),
-        };
-    sourceVersion === SAVE_VERSION
-      ? rawSave
-      : {
-          ...rawSave,
-          version: SAVE_VERSION,
-          lastFieldworkDay:
-            sourceVersion === 1 ? 0 : rawSave.lastFieldworkDay,
-          buildingPlacements:
-            sourceVersion === 1 || sourceVersion === 2
-              ? migrateBuildingPlacements(rawSave.buildings)
-              : sourceVersion === 3
-                ? migrateBuildingPlacements(
-                    rawSave.buildings,
-                    rawSave.buildingPlacements,
-                    true,
-                  )
-                : rawSave.buildingPlacements,
-          starterTutorialSeen:
-            sourceVersion < 5 ? false : rawSave.starterTutorialSeen,
-          hazardEvents: [],
-          hazardProgress: 0,
-          hazardInterval:
-            HAZARD_INTERVAL_MIN + (((rawSave.startingSector ?? 0) % 6) + 6) % 6,
-          randomSeed:
-            (((rawSave.startingSector ?? 0) + 1) * 0x9e37_79b1 +
-              (rawSave.day ?? 1)) >>>
-            0 || 1,
-          nextHazardId: 1,
         };
   if (save.version !== SAVE_VERSION) {
     throw new Error(`Unsupported save version: ${String(save.version)}.`);

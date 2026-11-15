@@ -644,42 +644,6 @@ function facilityStructureMarkup(
   const accessibleName = `${definition.name} facility ${instanceNumber}${hazardWarningLabel(hazard)}`;
   return `<g class="colony-structure facility-structure ${buildingId}" transform="translate(${x} ${y})" role="img" aria-label="${esc(accessibleName)}">
     <title>${esc(accessibleName)}</title>
-                    ? `${shell}<rect class="bug-vat" x="-31" y="-20" width="19" height="40" rx="2"/>
-                       <rect class="bug-vat vat-secondary" x="-9" y="-20" width="19" height="40" rx="2"/>
-                       <rect class="bug-vat" x="13" y="-20" width="18" height="40" rx="2"/>
-                       <path class="bug-pipe" d="M-22 -20 V-27 H22 V-20 M-12 0 H-9 M10 0 H13"/>
-                       <text class="structure-label" x="0" y="36">BUG FOOD MAKER</text>`
-                    : buildingId === 'ice-extractor'
-                      ? `${shell}<circle class="rig-housing" cx="0" cy="0" r="19"/>
-                         <circle class="rig-frame" cx="0" cy="0" r="8"/>
-                         <path class="rig-frame" d="M-30 0 H30 M0 -25 V25"/>
-                         <path class="warm-window" d="M-38 -23 H-27 M27 23 H38"/>
-                         <text class="structure-label" x="0" y="36">ICE DRILL</text>`
-                      : buildingId === 'oxygen-recycler'
-                        ? `${shell}<rect class="recycler-tank" x="-30" y="-19" width="23" height="38" rx="2"/>
-                           <rect class="recycler-tank tank-secondary" x="7" y="-19" width="23" height="38" rx="2"/>
-                           <path class="recycler-pipe" d="M-7 0 H7 M-18 -10 H18"/>
-                           <text class="structure-label" x="0" y="36">AIR RECYCLER</text>`
-                        : buildingId === 'regolith-collector'
-                          ? `${shell}<rect class="mine-hill" x="-28" y="-17" width="56" height="34" rx="1"/>
-                             <path class="collector-arm" d="M-8 -17 V-29 H18 V-8 M18 -8 L29 1"/>
-                             <path class="collector-scoop" d="M24 0 H34 V9 H27"/>
-                             <text class="structure-label" x="0" y="36">MOON DUST COLLECTOR</text>`
-                          : buildingId === 'deep-rock-mining'
-                            ? `${shell}<rect class="mine-hill" x="-31" y="-20" width="62" height="40" rx="1"/>
-                               <path class="deep-shaft" d="M0 -18 V18 M-18 0 H18"/>
-                               <rect class="mine-ore" x="-5" y="-5" width="10" height="10"/>
-                               <path class="mine-track" d="M-38 23 H38 M-28 18 V27 M28 18 V27"/>
-                               <text class="structure-label" x="0" y="36">DEEP ROCK MINE</text>`
-                            : `${shell}<rect class="mine-hill" x="-31" y="-20" width="62" height="40" rx="1"/>
-                               <path class="mine-track" d="M-22 0 H22 M0 -14 V14"/>
-                               <circle class="mine-ore" cx="0" cy="0" r="7"/>
-                               <path class="warm-window" d="M-38 -23 H-27 M27 23 H38"/>
-                               <text class="structure-label" x="0" y="36">SURFACE MINE</text>`;
-  const accessibleName =
-    `${definition.name} facility ${instanceNumber}${hazardWarningLabel(hazard)}`;
-  return `<g class="colony-structure facility-structure ${buildingId}" transform="translate(${x} ${y})" role="img" aria-label="${esc(accessibleName)}">
-    <title>${esc(accessibleName)}</title>
     ${meteoriteImpactMarkup(hazard, 53, 24)}
     ${structure}
     ${buildingWarningMarkup(hazard, 43, -42)}
