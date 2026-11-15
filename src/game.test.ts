@@ -3,11 +3,14 @@ import {
   BUILDINGS,
   DUST_STORM_VISUAL_DURATION_MS,
   SECTORS,
+  STARTING_RESOURCES,
   advanceDay,
   buildStructure,
   canPerformFieldwork,
+  canRecruitCrew,
   canUnlock,
   createColony,
+  getHousingCapacity,
   isFirstBuildFree,
   createSolarFlareHazard,
   getDailyResourceRates,
@@ -16,6 +19,7 @@ import {
   getMaintenanceChance,
   isValidBuildingPlacement,
   performFieldwork,
+  recruitCrew,
   repairHazard,
   unlockSector,
   validateSave,
@@ -31,14 +35,7 @@ describe('Lunar Frontier game rules', () => {
     expect(colony.unlockedSectors).toEqual([4]);
     expect(colony.buildings[4]).toEqual(['habitat']);
     expect(colony.starterTutorialSeen).toBe(false);
-    expect(colony.resources).toEqual({
-      water: 70,
-      food: 70,
-      energy: 80,
-      oxygen: 70,
-      metal: 110,
-      regolith: 120,
-    });
+    expect(colony.resources).toEqual(STARTING_RESOURCES);
   });
 
   it('uses the specified building-production modifiers for every sector', () => {
@@ -161,6 +158,24 @@ describe('Lunar Frontier game rules', () => {
     expect(built.resources.regolith).toBe(120);
     expect(built.buildings[4]).toContain('living-quarters');
     expect(built.people).toBe(7);
+  });
+
+  it('tracks housing and prevents unsupported crew recruitment', () => {
+    let colony = createColony(4);
+    expect(getHousingCapacity(colony)).toBe(7);
+    expect(canRecruitCrew(colony, 1)).toBe(false);
+
+    colony = buildStructure(colony, 'living-quarters');
+    expect(getHousingCapacity(colony)).toBe(11);
+    expect(canRecruitCrew(colony, 1)).toBe(false);
+
+    colony = buildStructure(colony, 'oxygen-plant');
+    colony = buildStructure(colony, 'hydroponic-farm');
+
+    expect(canRecruitCrew(colony, 1)).toBe(true);
+    const recruited = recruitCrew(colony, 1);
+    expect(recruited.people).toBe(8);
+    expect(recruited.resources.food).toBeLessThan(colony.resources.food);
   });
 
   it('builds each new facility as a separate option', () => {

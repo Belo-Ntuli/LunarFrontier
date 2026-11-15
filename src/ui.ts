@@ -15,11 +15,13 @@ import {
   advanceDay,
   buildStructure,
   canPerformFieldwork,
+  canRecruitCrew,
   canUnlock,
   colonyHasSolarPanels,
   createColony,
   getDailyResourceRates,
   getDefaultBuildingPlacement,
+  getHousingCapacity,
   getHazardCost,
   getHazardDescription,
   getHazardTitle,
@@ -30,6 +32,7 @@ import {
   isValidBuildingPlacement,
   loadColony,
   performFieldwork,
+  recruitCrew,
   repairHazard,
   saveColony,
   unlockSector,
@@ -154,6 +157,40 @@ const BUILDING_ICONS: Record<BuildingId, string> = {
   'deep-rock-mining': '⬡',
 };
 
+const RESOURCE_ICON_MARKUP: Record<ResourceKey, string> = {
+  water: '<path d="M12 2.5c-2.7 3.8-6.5 7.5-6.5 11.5a6.5 6.5 0 0 0 13 0c0-4-3.8-7.7-6.5-11.5Z"/><path d="M8.5 14.5a3.5 3.5 0 0 0 3.5 3.5"/>',
+  food: '<path d="M12 21V10"/><path d="M12 14c-4.5 0-7-2.2-7-6 4.5 0 7 2.2 7 6Z"/><path d="M12 11c0-4 2.3-6 7-6 0 4.3-2.3 6-7 6Z"/>',
+  energy: '<path d="m13.5 2.5-8 11h6l-1 8 8-12h-6l1-7Z"/>',
+  oxygen: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M17.5 6.5 20 4"/>',
+  metal: '<path d="m12 2.8 7.8 4.5v9L12 20.8l-7.8-4.5v-9L12 2.8Z"/><path d="m4.5 7.5 7.5 4.4 7.5-4.4M12 12v8.5"/>',
+  regolith: '<path d="m3.5 18 4.2-7.5 3.1 3.4 3.4-7.1 6.3 11.2H3.5Z"/><circle cx="17.8" cy="5.2" r="1"/>',
+};
+
+const BUILDING_ICON_MARKUP: Record<BuildingId, string> = {
+  habitat: '<path d="M3.5 11.5 12 4l8.5 7.5V20H14v-6h-4v6H3.5z"/><path d="M7.5 11h2m5 0h2"/>',
+  'living-quarters': '<rect x="3.5" y="6" width="17" height="14" rx="2"/><path d="M7.5 10h2m5 0h2m-9 5h2m5 0h2M11 20v-4h2v4"/>',
+  'solar-panels': '<path d="M3 6h7v10H3zM14 6h7v10h-7zM6.5 16v3m11-3v3M4 10h5m8 0h5M12 8v10m-3 1h6"/>',
+  'nuclear-power': '<path d="M7 4h10l2 4v11H5V8l2-4Z"/><circle cx="12" cy="12" r="4"/><path d="M12 8v4l3 2M8 4V2m8 2V2"/>',
+  'medical-bay': '<path d="M4 6h16v14H4z"/><path d="M12 9v8m-4-4h8M8 3h8v3H8z"/>',
+  hydroponics: '<path d="M3 19V9l9-5 9 5v10H3Z"/><path d="M7 19v-6m5 6V9m5 10v-6M5 10h14"/><path d="M10 12c0-2 2-3 4-3"/>',
+  'oxygen-plant': '<path d="M8 3h8m-6 0v5l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/><path d="M8 15h8"/><circle cx="12" cy="12" r="1"/>',
+  'ice-extractor': '<path d="M12 3v13m-5-5 5 5 5-5M8 19h8"/><path d="M5 7h3m8 0h3m-14 3h3m8 0h3"/>',
+  'oxygen-recycler': '<circle cx="12" cy="12" r="3"/><path d="M8 7a7 7 0 0 1 11 2m0 0V5m0 4h-4M16 17a7 7 0 0 1-11-2m0 0v4m0-4h4"/>',
+  'soil-farm': '<path d="M4 20h16M6 17c0-4 2-6 6-6s6 2 6 6"/><path d="M12 11V5m0 4c-3 0-5-2-5-5 3 0 5 2 5 5Zm0-2c0-3 2-5 5-5 0 3-2 5-5 5Z"/>',
+  'hydroponic-farm': '<path d="M3 19V8l9-4 9 4v11H3Z"/><path d="M7 19v-6m5 6V9m5 10v-6M5 10h14"/><path d="M9 13c0-2 1-3 3-3s3 1 3 3"/>',
+  'bug-protein-processor': '<path d="M5 9h14v10H5zM8 9V6h8v3m-4 1v6"/><circle cx="8" cy="5" r="1.5"/><circle cx="16" cy="5" r="1.5"/><path d="M3 13h2m14 0h2"/>',
+  'regolith-collector': '<path d="M5 19h14M8 16l2-5 4-2 1-5m-6 9 5 3 3-3"/><path d="m15 4 3 1-1 3"/>',
+  'deep-rock-mining': '<path d="M4 20h16M6 17l3-7h6l3 7"/><path d="M12 10V4m-5 5 5-5 5 5m-5-2 3 2"/>',
+};
+
+function resourceIconMarkup(resource: ResourceKey): string {
+  return `<svg class="resource-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${RESOURCE_ICON_MARKUP[resource]}</svg>`;
+}
+
+function buildingIconMarkup(buildingId: BuildingId): string {
+  return `<svg class="building-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${BUILDING_ICON_MARKUP[buildingId]}</svg>`;
+}
+
 const resourceRate = (resource: ResourceKey): number => {
   if (!colony) return 0;
   return getDailyResourceRates(colony)[resource];
@@ -185,7 +222,7 @@ function resourceMarkup(): string {
         ? ' resource-low'
         : '';
     return `<div class="resource-chip${alertClass}" title="${info.label}: ${rateText}">
-      <span class="resource-glyph" style="--resource-color:${info.color}">${info.icon}</span>
+      <span class="resource-glyph" style="--resource-color:${info.color}">${resourceIconMarkup(resource)}</span>
       <span class="resource-value">${formatResourceAmount(activeColony.resources[resource])}</span>
       <span class="resource-name">${info.label}</span>
       <span class="resource-rate ${rate < 0 ? 'rate-negative' : 'rate-positive'}">${rateText}</span>
@@ -261,12 +298,15 @@ function hudMarkup(): string {
       <span class="save-state"><i class="live-dot"></i> LOCAL MISSION</span>
     </div>`;
   }
+  const housingCapacity = getHousingCapacity(colony);
+  const canRecruit = canRecruitCrew(colony, 1);
   return `<div class="header-meta">
-      <div class="day-badge"><span class="day-symbol">◷</span><span>DAY <strong>${colony.day}</strong></span></div>
-      <div class="crew-badge"><span class="crew-symbol">♟</span><span><strong>${colony.people}</strong> CREW</span></div>
+      <div class="day-badge" aria-label="Lunar day ${colony.day}"><span class="day-symbol" aria-hidden="true">◷</span><span class="day-label">LUNAR DAY</span><strong>${String(colony.day).padStart(2, '0')}</strong></div>
+      <div class="crew-badge"><span class="crew-symbol">♟</span><span><strong>${colony.people}/${housingCapacity}</strong> CREW</span></div>
       <button class="pause-button ${colony.paused ? 'is-paused' : ''}" data-action="toggle-pause" aria-label="${colony.paused ? 'Resume simulation' : 'Pause simulation'}">
         <span>${colony.paused ? '▶' : 'Ⅱ'}</span>${colony.paused ? 'RESUME' : 'PAUSE'}
       </button>
+      <button class="button button-secondary" data-action="recruit-crew" ${!canRecruit || colony.paused || colony.failed ? 'disabled' : ''}>RECRUIT +1</button>
     </div>`;
 }
 
@@ -441,7 +481,6 @@ function dailyFlowMarkup(): string {
   return `<div class="day-flow">
     <div><span class="eyebrow">NEXT LUNAR DAY</span><strong class="time-left">${formatTime(remaining)}</strong><span class="flow-caption">Automatic day transition</span></div>
     <div class="flow-progress"><div class="flow-track"><i style="width:${progress}%"></i></div><span class="progress-label day-progress">${Math.floor(progress)}%</span></div>
-    <button class="button button-secondary" data-action="advance-day" ${colony.paused || colony.failed ? 'disabled' : ''}>END SHIFT EARLY <span>↗</span></button>
   </div>`;
 }
 
@@ -479,14 +518,13 @@ function buildingCardMarkup(buildingId: BuildingId): string {
       ? 'Crew care'
       : 'Facility support');
   return `<article class="building-card ${built ? 'building-built' : ''}">
-    <div class="building-icon icon-${building.id}">${BUILDING_ICONS[building.id]}</div>
+    <div class="building-icon icon-${building.id}">${buildingIconMarkup(building.id)}</div>
     <div class="building-copy"><div class="building-title-row"><h3>${esc(building.name)}</h3>${built ? `<span class="built-label">${builtCount} BUILT</span>` : ''}</div>
       <p>${esc(BUILDING_PURPOSE[building.id])} ${esc(building.description)}</p>
       <div class="building-yield">${yieldLabel}${Object.keys(building.consumption).length ? ` · uses ${Object.entries(building.consumption).map(([key, amount]) => `${amount} ${RESOURCE_INFO[key as ResourceKey].label}/day`).join(', ')}` : ''}</div>
       <div class="building-cost">${costs}</div>
     </div>
-    <button class="build-button ${affordable ? '' : 'is-unaffordable'} ${isPlacing ? 'is-placing' : ''}" data-action="${isPlacing ? 'cancel-placement' : 'build'}" data-building="${building.id}" ${!affordable ? 'disabled' : ''} aria-label="${isPlacing ? `Cancel placing ${building.name}` : built ? `Place another ${building.name}` : `Choose a location for ${building.name}`}">${isPlacing ? 'CANCEL' : affordable ? 'PLACE' : 'NEED'}</button>
-    <button class="build-button ${built ? 'is-built' : affordable ? '' : 'is-unaffordable'} ${isPlacing || isConstructing ? 'is-placing' : ''}" data-action="${isPlacing ? 'cancel-placement' : 'build'}" data-building="${building.id}" ${built || !affordable || (constructionTask && !isPlacing) ? 'disabled' : ''} aria-label="${built ? 'Already built' : isConstructing ? `Building ${building.name}` : constructionTask ? 'Wait for construction to finish' : isPlacing ? `Cancel placing ${building.name}` : `Choose a location for ${building.name}`}">${built ? 'BUILT' : isConstructing ? 'BUILDING' : constructionTask ? 'WAIT' : isPlacing ? 'CANCEL' : affordable ? 'PLACE' : 'NEED'}</button>
+    <button class="build-button ${built ? 'is-built' : affordable ? '' : 'is-unaffordable'} ${isPlacing || isConstructing ? 'is-placing' : ''}" data-action="${isPlacing ? 'cancel-placement' : 'build'}" data-building="${building.id}" ${!affordable || (constructionTask && !isPlacing) ? 'disabled' : ''} aria-label="${isConstructing ? `Building ${building.name}` : constructionTask ? 'Wait for construction to finish' : isPlacing ? `Cancel placing ${building.name}` : built ? `Place another ${building.name}` : `Choose a location for ${building.name}`}">${isPlacing ? 'CANCEL' : isConstructing ? 'BUILDING' : constructionTask ? 'WAIT' : affordable ? 'PLACE' : 'NEED'}</button>
   </article>`;
 }
 
@@ -501,7 +539,7 @@ function sectorResourceMarkup(): string {
       (resource === 'water' || resource === 'food' || resource === 'oxygen') &&
       amount < colony!.people * 3;
     return `<div class="resource-mini ${urgent ? 'resource-alert' : ''}" title="${info.label}: ${rateLabel} colony-wide">
-      <i style="--resource-color:${info.color}">${info.icon}</i>
+      <span class="resource-mini-icon" style="--resource-color:${info.color}">${resourceIconMarkup(resource)}</span>
       <span class="resource-mini-copy"><strong>${formatResourceAmount(amount)}</strong><small>${info.label}</small></span>
       <em class="${rate < 0 ? 'rate-negative' : ''}">${rateLabel}</em>
     </div>`;
@@ -736,7 +774,7 @@ function sectorSurfaceMarkup(sector: Sector): string {
   return `<div class="surface-panel ${isPolar ? 'surface-polar' : ''}">
     <div class="surface-sky">
       <div class="surface-label"><span class="eyebrow">SECTOR ${String(sector.id + 1).padStart(2, '0')}</span><h2>${esc(sector.name)}</h2><p>${esc(sector.terrain)} · SURFACE OPERATIONS</p></div>
-      <span class="surface-coordinate">DAY ${colony?.day} · ${colony?.paused ? 'PAUSED' : 'LIVE'}</span>
+      <span class="surface-coordinate">${colony?.paused ? 'SIMULATION PAUSED' : 'SURFACE LINK ACTIVE'}</span>
     </div>
     <div class="surface-grid ${pendingBuilding ? 'is-placement-active' : ''}" ${pendingBuilding ? 'role="group" tabindex="0" aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Enter Escape" aria-label="Placement map: use arrow keys to move, Enter to place, or Escape to cancel"' : 'aria-label="Sector outpost map"'}>
       <div class="surface-map-world">
@@ -774,14 +812,6 @@ function sectorSurfaceMarkup(sector: Sector): string {
           <ellipse cx="0" cy="0" rx="47" ry="29"/><circle cx="0" cy="0" r="8"/><path d="M-31 -19 L31 19 M31 -19 L-31 19"/>
           <text x="0" y="48">EXPEDITION SITE</text>
         </g>`}
-        ${(colony?.buildingPlacements[sector.id] ?? []).map((placement, index) =>
-          facilityStructureMarkup(
-            placement.buildingId,
-            placement,
-            index + 1,
-            hazardForBuilding(placement.buildingId),
-          ),
-        ).join('')}
         ${hasHabitat ? habitatMarkup(colony?.people ?? 0, hazardForBuilding('habitat')) : ''}
         ${(colony?.buildingPlacements[sector.id] ?? [])
           .map((placement, index) =>
@@ -803,7 +833,7 @@ function sectorSurfaceMarkup(sector: Sector): string {
           ).join('')}
         </div>
         ${hasDustStorm ? `<div class="dust-storm-effect" style="--dust-storm-duration:${DUST_STORM_VISUAL_DURATION_MS}ms;--dust-storm-age:-${dustStormAgeMs}ms;--dust-storm-drift-delay:-${dustStormAgeMs % 5000}ms" role="img" aria-label="Dust storm sweeping across the lunar surface"></div>` : ''}
-        ${pendingBuilding && placementCursor ? `<div class="placement-preview ${cursorIsValid ? '' : 'is-invalid'}" style="left:${placementCursor.x * 100}%;top:${placementCursor.y * 100}%" aria-hidden="true"><span></span></div>` : ''}
+        ${pendingBuilding && placementCursor ? `<div class="placement-preview ${cursorIsValid ? '' : 'is-invalid'}" style="left:${placementCursor.x * 100}%;top:${placementCursor.y * 100}%" aria-hidden="true"><span class="placement-preview-icon">${buildingIconMarkup(pendingBuilding.id)}</span></div>` : ''}
         <button class="worksite-marker prospect-site ${prospectingAvailable ? 'worksite-ready' : ''}" data-action="fieldwork" data-fieldwork="prospecting" ${prospectingAvailable ? '' : 'disabled'} aria-label="Prospect mineral ridge: spend 4 energy to collect 2 metal and 5 lunar regolith. ${prospectStatus}">
           <span class="worksite-icon">⌕</span><strong>MINERAL RIDGE</strong><small>−4 ENERGY · +2 METAL · +5 REGOLITH</small><em>${prospectStatus}</em>
         </button>
@@ -849,7 +879,7 @@ function renderPixelatedSurfaceMap(): void {
   const height = 160;
   const pixelScale = 2;
   context.setTransform(pixelScale, 0, 0, pixelScale, 0, 0);
-  context.fillStyle = '#9bb3b9';
+  context.fillStyle = '#b99570';
   context.fillRect(0, 0, width, height);
 
   const zoom = BASE_MAP_ZOOM;
@@ -868,13 +898,13 @@ function renderPixelatedSurfaceMap(): void {
     for (let x = 0; x < width; x += 3) {
       const shade = (x * 17 + y * 31 + Math.floor((x * y) / 7)) % 19;
       if (shade < 6) {
-        context.fillStyle = shade % 2 ? '#a8bec1' : '#8fa9b0';
+        context.fillStyle = shade % 2 ? '#c7a47c' : '#a98765';
         context.fillRect(x, y, 3, 3);
       }
     }
   }
 
-  context.fillStyle = 'rgba(42, 59, 65, .82)';
+  context.fillStyle = 'rgba(68, 51, 43, .82)';
   const groundPatches = [
     [[0, 5], [13, 7], [18, 12], [15, 20], [8, 24], [0, 22]],
     [[0, 102], [14, 99], [22, 107], [19, 119], [9, 124], [0, 121]],
@@ -893,23 +923,23 @@ function renderPixelatedSurfaceMap(): void {
     context.fill();
   }
 
-  context.fillStyle = '#50666d';
+  context.fillStyle = '#6e594b';
   context.beginPath();
   context.arc(37, 63, 23, 0, Math.PI * 2);
   context.fill();
-  context.fillStyle = '#7f999f';
+  context.fillStyle = '#a08061';
   context.beginPath();
   context.arc(37, 63, 17, 0, Math.PI * 2);
   context.fill();
   context.beginPath();
   context.arc(211, 108, 27, 0, Math.PI * 2);
   context.fill();
-  context.fillStyle = '#718990';
+  context.fillStyle = '#8d6e55';
   context.beginPath();
   context.arc(211, 108, 20, 0, Math.PI * 2);
   context.fill();
 
-  context.fillStyle = '#435960';
+  context.fillStyle = '#715a47';
   for (let y = 1; y < height; y += 2) {
     for (let x = 1; x < width; x += 2) {
       const fleck = (x * 23 + y * 19 + Math.floor((x * y) / 5)) % 29;
@@ -919,7 +949,7 @@ function renderPixelatedSurfaceMap(): void {
     }
   }
 
-  context.strokeStyle = 'rgba(62, 82, 89, .22)';
+  context.strokeStyle = 'rgba(72, 53, 42, .2)';
   context.lineWidth = 0.25;
   for (let x = 3; x < width; x += 3) {
     context.beginPath();
@@ -934,12 +964,12 @@ function renderPixelatedSurfaceMap(): void {
     context.stroke();
   }
 
-  context.fillStyle = 'rgba(202, 220, 217, .34)';
+  context.fillStyle = 'rgba(239, 213, 171, .3)';
   context.beginPath();
   context.ellipse(125, 86, 45, 31, 0, 0, Math.PI * 2);
   context.fill();
 
-  context.strokeStyle = 'rgba(48, 65, 70, .52)';
+  context.strokeStyle = 'rgba(67, 55, 48, .5)';
   context.lineWidth = 2;
   context.setLineDash([2, 4]);
   context.beginPath();
@@ -953,20 +983,20 @@ function renderPixelatedSurfaceMap(): void {
   context.setLineDash([]);
 
   const colors: Record<BuildingId, string> = {
-    habitat: '#f0b968',
-    'living-quarters': '#e8b66d',
-    'solar-panels': '#79b9d1',
-    'nuclear-power': '#ed9564',
-    'medical-bay': '#e58f9e',
-    hydroponics: '#a8c987',
-    'oxygen-plant': '#89c8ec',
-    'ice-extractor': '#a5d6dc',
-    'oxygen-recycler': '#c5b3d5',
-    'soil-farm': '#9caf6e',
-    'hydroponic-farm': '#a8d06c',
-    'bug-protein-processor': '#cf9f63',
-    'regolith-collector': '#d8ad72',
-    'deep-rock-mining': '#b68a6e',
+    habitat: '#ffd36f',
+    'living-quarters': '#efbd72',
+    'solar-panels': '#75d9e8',
+    'nuclear-power': '#ff936d',
+    'medical-bay': '#ff9cac',
+    hydroponics: '#b2e477',
+    'oxygen-plant': '#84c8ff',
+    'ice-extractor': '#91e6f4',
+    'oxygen-recycler': '#b7a9ff',
+    'soil-farm': '#c0dc6f',
+    'hydroponic-farm': '#8be18b',
+    'bug-protein-processor': '#e8b766',
+    'regolith-collector': '#f0b76b',
+    'deep-rock-mining': '#d19a77',
   };
   const drawPixelBuilding = (
     x: number,
@@ -1574,9 +1604,6 @@ function sectorScreenMarkup(): string {
         </div>
       </section>
       <aside class="management-panel panel">
-        <div class="management-heading"><div><span class="eyebrow">COLONY DEVELOPMENT</span><h1>Build facilities</h1></div><span class="system-count">${(colony.buildings[sector.id] ?? []).filter((id) => id !== 'habitat').length} BUILT</span></div>
-        <p class="management-copy">One first placement of Crew homes, Solar panels, Soil farm, and Ice drill is free per colony. Repeats cost materials.</p>
-        <div class="habitat-status ${hasHabitat ? '' : 'habitat-unavailable'}"><span class="habitat-icon">⌂</span><span><strong>${hasHabitat ? 'Starter shelter online' : 'Expedition site · no shelter'}</strong><small>${hasHabitat ? 'Starter shelter and crew homes shown on the surface map' : 'Build crew homes to add shelter at this outpost'}</small></span><span class="status-pill ${hasHabitat ? 'status-open' : 'status-locked'}">${hasHabitat ? 'ONLINE' : 'SITE'}</span></div>
         <div class="management-heading"><div><span class="eyebrow">COLONY DEVELOPMENT</span><h1>Build facilities</h1></div><span class="system-count">${(colony.buildings[sector.id] ?? []).filter((id) => id !== 'habitat').length} / ${BUILDINGS.length - 1}</span></div>
         <p class="management-copy">${constructionTask ? 'A crew member is traveling to and building the selected facility. It will appear when construction is complete.' : 'Choose a facility, then select an open spot on the map. Costs are paid once; production and power use apply every lunar day across the colony.'}</p>
         <div class="habitat-status ${hasHabitat ? '' : 'habitat-unavailable'}"><span class="habitat-icon">⌂</span><span><strong>${hasHabitat ? 'Habitat & living quarters online' : 'Expedition site · no habitat'}</strong><small>${hasHabitat ? 'Shelter and crew quarters shown on the surface map' : 'Build living quarters to add shelter at this outpost'}</small></span><span class="status-pill ${hasHabitat ? 'status-open' : 'status-locked'}">${hasHabitat ? 'ONLINE' : 'SITE'}</span></div>
@@ -1871,11 +1898,20 @@ function handleAction(button: HTMLElement): void {
         updateColony(colony);
       }
       break;
-    case 'advance-day':
-      if (colony && !colony.paused && !colony.failed) {
-        updateColony(advanceDay(colony));
+    case 'recruit-crew': {
+      if (!colony) break;
+      try {
+        if (!canRecruitCrew(colony, 1)) {
+          throw new Error('Your colony does not have enough housing, oxygen, food, or resources to recruit another crew member.');
+        }
+        colony = recruitCrew(colony, 1);
+        updateColony(colony);
+        showToast('Additional crew member recruited.');
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Crew recruitment is unavailable.');
       }
       break;
+    }
     case 'back-to-globe':
     case 'home':
       if (constructionTask) break;

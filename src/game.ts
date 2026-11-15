@@ -89,6 +89,9 @@ export interface BuildingDefinition {
   description: string;
   metal: number;
   regolith: number;
+  constructionCost?: Partial<Resources>;
+  housingCapacity?: number;
+  crewCapacity?: number;
   production: Partial<Resources>;
   consumption: Partial<Resources>;
 }
@@ -346,6 +349,15 @@ export const SECTORS: Sector[] = [
   },
 ];
 
+export const STARTING_RESOURCES: Resources = {
+  water: 70,
+  food: 70,
+  energy: 80,
+  oxygen: 70,
+  metal: 110,
+  regolith: 120,
+};
+
 export const RESOURCE_INFO: Record<
   ResourceKey,
   { label: string; icon: string; color: string }
@@ -366,6 +378,8 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Shelter and starter life-support equipment for the crew.',
     metal: 0,
     regolith: 0,
+    constructionCost: { metal: 0, regolith: 0 },
+    housingCapacity: 7,
     production: { water: 1, food: 2, energy: 14, oxygen: 2 },
     consumption: {},
   },
@@ -376,6 +390,8 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Adds a safe place for crew to live at this outpost; it does not add more crew.',
     metal: 20,
     regolith: 16,
+    constructionCost: { metal: 20, regolith: 16 },
+    housingCapacity: 4,
     production: {},
     consumption: {},
   },
@@ -386,6 +402,7 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Grows 10 food each day and uses 2 water and 2 energy.',
     metal: 18,
     regolith: 18,
+    constructionCost: { metal: 18, regolith: 18 },
     production: { food: 10 },
     consumption: { water: 2, energy: 2 },
   },
@@ -396,6 +413,7 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Extracts 10 water daily and needs 3 energy to operate.',
     metal: 20,
     regolith: 12,
+    constructionCost: { metal: 20, regolith: 12 },
     production: { water: 10 },
     consumption: { energy: 3 },
   },
@@ -406,6 +424,7 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Recycles 10 oxygen each day and uses 2 energy.',
     metal: 14,
     regolith: 8,
+    constructionCost: { metal: 14, regolith: 8 },
     production: { oxygen: 10 },
     consumption: { energy: 2 },
   },
@@ -416,6 +435,7 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Generates additional power from sunlight.',
     metal: 8,
     regolith: 6,
+    constructionCost: { metal: 8, regolith: 6 },
     production: { energy: 8 },
     consumption: {},
   },
@@ -426,6 +446,7 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Produces steady high-output power; reactor fuel is not modeled as a separate resource.',
     metal: 32,
     regolith: 28,
+    constructionCost: { metal: 32, regolith: 28 },
     production: { energy: 24 },
     consumption: {},
   },
@@ -436,6 +457,7 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Provides an on-site clinic and crew care; health outcomes are not separately simulated.',
     metal: 18,
     regolith: 14,
+    constructionCost: { metal: 18, regolith: 14 },
     production: {},
     consumption: { energy: 1 },
   },
@@ -446,6 +468,7 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Produces breathable oxygen using colony power.',
     metal: 22,
     regolith: 16,
+    constructionCost: { metal: 22, regolith: 16 },
     production: { oxygen: 14 },
     consumption: { energy: 3 },
   },
@@ -456,6 +479,7 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Grows less food while using less water than the water-grown farm.',
     metal: 16,
     regolith: 14,
+    constructionCost: { metal: 16, regolith: 14 },
     production: { food: 5 },
     consumption: { water: 1, energy: 1 },
   },
@@ -466,6 +490,7 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Uses more water and power to grow more food.',
     metal: 24,
     regolith: 22,
+    constructionCost: { metal: 24, regolith: 22 },
     production: { food: 14 },
     consumption: { water: 4, energy: 3 },
   },
@@ -476,6 +501,7 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Uses some food to make a larger amount of food.',
     metal: 22,
     regolith: 18,
+    constructionCost: { metal: 22, regolith: 18 },
     production: { food: 8 },
     consumption: { food: 3, energy: 2 },
   },
@@ -486,6 +512,7 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Collects moon dust for building materials using colony power.',
     metal: 12,
     regolith: 10,
+    constructionCost: { metal: 12, regolith: 10 },
     production: { regolith: 10 },
     consumption: { energy: 2 },
   },
@@ -496,6 +523,7 @@ export const BUILDINGS: BuildingDefinition[] = [
     description: 'Extracts additional metal from deep deposits with a high power demand.',
     metal: 32,
     regolith: 26,
+    constructionCost: { metal: 32, regolith: 26 },
     production: { metal: 8, regolith: 4 },
     consumption: { energy: 8 },
   },
@@ -668,14 +696,7 @@ export function createColony(startingSector: number): ColonySave {
     currentSector: startingSector,
     unlockedSectors: [startingSector],
     people: 7,
-    resources: {
-      water: 70,
-      food: 70,
-      energy: 80,
-      oxygen: 70,
-      metal: 110,
-      regolith: 120,
-    },
+    resources: { ...STARTING_RESOURCES },
     buildings: { [startingSector]: ['habitat'] },
     buildingPlacements: { [startingSector]: [] },
     day: 1,
@@ -709,6 +730,75 @@ export function getBuilding(id: BuildingId): BuildingDefinition {
   const building = BUILDINGS.find((item) => item.id === id);
   if (!building) throw new Error(`Unknown building: ${id}`);
   return building;
+}
+
+export function getHousingCapacity(colony: ColonySave): number {
+  const total = Object.values(colony.buildings).reduce((sum, buildingIds) => {
+    return (
+      sum +
+      buildingIds.reduce((sectorTotal, buildingId) => {
+        const definition = getBuilding(buildingId);
+        const housing = definition.housingCapacity ?? definition.crewCapacity ?? 0;
+        return sectorTotal + housing;
+      }, 0)
+    );
+  }, 0);
+  return Math.max(0, total);
+}
+
+export function getSupportStatus(colony: ColonySave): {
+  housingCapacity: number;
+  oxygenNet: number;
+  foodNet: number;
+  canSupport: boolean;
+} {
+  const housingCapacity = getHousingCapacity(colony);
+  const dailyRates = getDailyResourceRates(colony);
+  return {
+    housingCapacity,
+    oxygenNet: dailyRates.oxygen,
+    foodNet: dailyRates.food,
+    canSupport: colony.people <= housingCapacity && dailyRates.oxygen >= 0 && dailyRates.food >= 0,
+  };
+}
+
+export function canRecruitCrew(colony: ColonySave, count = 1): boolean {
+  if (!Number.isInteger(count) || count < 1) return false;
+  const nextPeople = colony.people + count;
+  const housingCapacity = getHousingCapacity(colony);
+  if (nextPeople > housingCapacity) return false;
+
+  const support = getSupportStatus(colony);
+  if (!support.canSupport) return false;
+
+  const recruitmentCost: Partial<Resources> = {
+    metal: count * 8,
+    regolith: count * 10,
+    food: count * 3,
+    energy: count * 2,
+  };
+
+  return RESOURCE_ORDER.every((resource) => colony.resources[resource] >= (recruitmentCost[resource] ?? 0));
+}
+
+export function recruitCrew(colony: ColonySave, count = 1): ColonySave {
+  if (!Number.isInteger(count) || count < 1) {
+    throw new Error('The crew count must be a positive integer.');
+  }
+  if (!canRecruitCrew(colony, count)) {
+    throw new Error('Your colony does not have enough housing, oxygen, food, or resources to recruit more crew.');
+  }
+  const recruitmentCost: Partial<Resources> = {
+    metal: count * 8,
+    regolith: count * 10,
+    food: count * 3,
+    energy: count * 2,
+  };
+  const resources = { ...colony.resources };
+  for (const resource of RESOURCE_ORDER) {
+    resources[resource] -= recruitmentCost[resource] ?? 0;
+  }
+  return { ...colony, people: colony.people + count, resources };
 }
 
 export function isFirstBuildFree(colony: ColonySave, buildingId: BuildingId): boolean {
@@ -819,8 +909,9 @@ export function buildStructure(
   if (buildingId === 'habitat') throw new Error('The basic habitat is included with the landing.');
   const placed = colony.buildings[colony.currentSector] ?? [];
   const firstBuildFree = isFirstBuildFree(colony, buildingId);
-  const metalCost = firstBuildFree ? 0 : definition.metal;
-  const regolithCost = firstBuildFree ? 0 : definition.regolith;
+  const constructionCost = definition.constructionCost ?? { metal: definition.metal, regolith: definition.regolith };
+  const metalCost = firstBuildFree ? 0 : constructionCost.metal ?? 0;
+  const regolithCost = firstBuildFree ? 0 : constructionCost.regolith ?? 0;
   if (
     colony.resources.metal < metalCost ||
     colony.resources.regolith < regolithCost
@@ -1001,6 +1092,7 @@ export function advanceDay(colony: ColonySave, now = Date.now()): ColonySave {
   const missingLifeSupport = (['water', 'food', 'oxygen', 'energy'] as const).find(
     (resource) => colony.resources[resource] + rates[resource] < 0,
   );
+  const exceedsHousingCapacity = colony.people > getHousingCapacity(colony);
   const nextDay = colony.day + 1;
   const hasSolarPanels = colonyHasSolarPanels(colony);
   let hazardEvents = colony.hazardEvents
@@ -1031,9 +1123,11 @@ export function advanceDay(colony: ColonySave, now = Date.now()): ColonySave {
   );
   const failureReason = overdueHazard
     ? `The crew died after ${getHazardTitle(overdueHazard).toLowerCase()} was left unresolved for 2 lunar days.`
-    : missingLifeSupport
-      ? `The crew ran out of ${RESOURCE_INFO[missingLifeSupport].label.toLowerCase()}.`
-      : '';
+    : exceedsHousingCapacity
+      ? 'The colony exceeded its housing capacity and can no longer support the crew.'
+      : missingLifeSupport
+        ? `The crew ran out of ${RESOURCE_INFO[missingLifeSupport].label.toLowerCase()}.`
+        : '';
   const nextColony: ColonySave = {
     ...colony,
     resources,
