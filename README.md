@@ -2,8 +2,10 @@
 
 A browser-based lunar colony management game. Explore a 3D atlas of the Moon,
 establish an outpost, manage life-support resources, build facilities, and
-expand into new sectors. The game is an educational simulation; its lunar
-terrain and resource values are simplified for play.
+expand into new sectors. Survive meteorite impacts, dust storms, and facility
+maintenance by spending colony resources to repair affected structures. The
+game is an educational simulation; its lunar terrain, hazards, and resource
+values are simplified for play.
 
 ## Get started
 
@@ -24,6 +26,9 @@ npm run dev
 
 Open the local URL printed by Vite. Player progress is saved in the current
 browser's local storage; the game does not require an account or backend.
+
+Solar-flare events and NASA DONKI data integration are planned for a future
+update; the current version does not make NASA API requests.
 
 ## Host on GitHub Pages
 
