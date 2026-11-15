@@ -13,6 +13,7 @@
   --panel-solid: #111827;
   --teal: #5bd7c5;
   --gold: #f0c879;
+  --blue: #72b7ff;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --display: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
@@ -196,10 +197,12 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
   margin: 0 auto;
   padding: 26px 28px 22px;
   display: grid;
-  grid-template-columns: minmax(265px, 305px) minmax(400px, 1fr) minmax(265px, 305px);
+  grid-template-columns: minmax(177px, 203px) minmax(400px, 1fr) minmax(177px, 203px);
   gap: 18px;
   align-items: stretch;
 }
+
+.atlas-layout.is-inspector-collapsed { grid-template-columns: minmax(177px, 203px) minmax(0, 1fr) 44px; }
 
 .panel {
   border: 1px solid var(--line);
@@ -215,8 +218,26 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
   border-radius: 5px;
 }
 
+.atlas-sidebar-content { min-height: 0; display: flex; flex: 1; flex-direction: column; }
 .panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .panel-heading h1, .management-heading h1 { margin: 8px 0 0; font: 500 20px var(--display); letter-spacing: -0.035em; }
+.column-toggle {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(151, 174, 202, 0.22);
+  border-radius: 3px;
+  color: #b7c8dc;
+  background: rgba(91, 126, 166, 0.1);
+  font: 20px/1 var(--display);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.column-toggle:hover { color: #fff; background: rgba(82, 153, 226, 0.22); border-color: rgba(114, 183, 255, 0.55); }
+.column-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .sector-count, .system-count {
   padding: 5px 7px;
   border: 1px solid rgba(151, 174, 202, 0.19);
@@ -258,14 +279,14 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 }
 
 .sector-row:hover { background: rgba(112, 145, 172, 0.09); }
-.sector-row.is-selected { background: rgba(240, 200, 121, 0.09); }
+.sector-row.is-selected { background: rgba(69, 145, 231, 0.2); box-shadow: inset 2px 0 var(--blue); }
 .sector-index { width: 22px; color: #6d7a8d; font: 9px var(--mono); }
 .sector-row-copy { flex: 1; min-width: 0; display: grid; gap: 3px; }
 .sector-row-copy strong { overflow: hidden; color: #d7dfea; font-size: 10px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .sector-row-copy small { color: #657185; font: 8px var(--mono); letter-spacing: 0.08em; }
 .sector-state { color: #596777; font-size: 11px; }
 .is-unlocked .sector-state { color: var(--teal); }
-.is-selected .sector-index, .is-selected .sector-row-copy strong { color: var(--gold); }
+.is-selected .sector-index, .is-selected .sector-row-copy strong { color: var(--blue); }
 .atlas-legend { padding: 12px 0 5px; display: flex; gap: 15px; color: #8793a4; font: 9px var(--mono); }
 .atlas-legend span { display: flex; align-items: center; gap: 6px; }
 .legend-dot { width: 6px; height: 6px; display: inline-block; border-radius: 50%; }
@@ -326,6 +347,11 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
   border-radius: 5px;
 }
 
+.inspector-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.inspector-content { min-height: 0; display: flex; flex: 1; flex-direction: column; }
+.sector-inspector.is-collapsed { padding: 10px 5px; align-items: center; }
+.sector-inspector.is-collapsed .inspector-heading { width: 100%; justify-content: center; }
+.sector-inspector.is-collapsed .inspector-heading > .eyebrow, .sector-inspector.is-collapsed .inspector-content { display: none; }
 .inspector-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .inspector-top .eyebrow { font-size: 8px; }
 .status-pill { padding: 5px 7px; border: 1px solid rgba(167,190,218,.15); border-radius: 2px; color: #8792a2; font: 8px var(--mono); letter-spacing: .09em; white-space: nowrap; }
@@ -669,12 +695,12 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 @media (max-width: 1150px) {
   .topbar { padding: 0 20px; gap: 16px; }
   .brand { width: 205px; }
-  .atlas-layout { grid-template-columns: minmax(235px, 275px) minmax(360px, 1fr); padding: 18px; }
-  .sector-inspector { grid-column: 1 / span 2; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; column-gap: 22px; }
-  .sector-inspector > :not(.inspector-top):not(h2):not(.sector-description):not(.inspector-divider):not(.current-sector-label) { grid-column: 2; }
-  .sector-inspector .inspector-top, .sector-inspector h2, .sector-inspector .sector-description, .sector-inspector .inspector-divider { grid-column: 1; }
-  .sector-inspector .inspector-divider { grid-row: 4; }
-  .sector-inspector .current-sector-label { grid-column: 1 / span 2; }
+  .atlas-layout { grid-template-columns: minmax(157px, 183px) minmax(360px, 1fr) minmax(157px, 183px); padding: 18px; }
+  .atlas-layout.is-inspector-collapsed { grid-template-columns: minmax(157px, 183px) minmax(0, 1fr) 44px; }
+  .sector-inspector.is-collapsed { height: 44px; padding: 5px; }
+  .sector-inspector.is-collapsed .inspector-heading { height: 34px; justify-content: center; }
+  .sector-inspector.is-collapsed .inspector-heading > .eyebrow { display: none; }
+  .sector-inspector.is-collapsed .inspector-content { display: none; }
   .globe-stage, .atlas-sidebar { min-height: 620px; }
   .moon-mount { min-height: 590px; }
   .sector-game-grid { grid-template-columns: 1fr; }
@@ -686,7 +712,27 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
   .management-panel { min-height: auto; }
 }
 
+@media (min-width: 901px) and (max-width: 1150px) {
+  .atlas-sidebar { padding-inline: 12px; }
+  .atlas-sidebar .panel-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .atlas-sidebar .panel-heading-copy { grid-column: 1 / -1; min-width: 0; }
+  .atlas-sidebar .panel-heading h1 { font-size: 18px; }
+  .atlas-sidebar .sector-count { grid-column: 1; grid-row: 2; justify-self: start; }
+}
+
 @media (max-width: 900px) {
+  .atlas-layout { grid-template-columns: minmax(235px, 275px) minmax(360px, 1fr); padding: 18px; }
+  .atlas-layout.is-inspector-collapsed { grid-template-columns: minmax(235px, 275px) minmax(360px, 1fr); }
+  .sector-inspector { grid-column: 1 / span 2; min-height: 0; display: block; }
+  .inspector-content { display: grid; grid-template-columns: 1fr 1fr; column-gap: 22px; }
+  .inspector-content > :not(.inspector-top):not(h2):not(.sector-description):not(.inspector-divider):not(.current-sector-label) { grid-column: 2; }
+  .inspector-content .inspector-top, .inspector-content h2, .inspector-content .sector-description, .inspector-content .inspector-divider { grid-column: 1; }
+  .inspector-content .inspector-divider { grid-row: 4; }
+  .inspector-content .current-sector-label { grid-column: 1 / span 2; }
   .sector-command-layout { grid-template-columns: minmax(0, 1fr); }
   .management-panel { grid-column: 1 / -1; position: static; max-height: none; }
   .management-panel .building-list { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
@@ -725,6 +771,11 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
   .globe-hint { top: 11px; right: 9px; font-size: 8px; }
   .globe-caption { bottom: 11px; font-size: 8px; }
   .sector-inspector { order: 3; min-height: 0; padding: 16px; display: flex; }
+  .sector-inspector.is-collapsed { height: 44px; padding: 5px; }
+  .sector-inspector.is-collapsed .inspector-heading { height: 34px; justify-content: center; }
+  .sector-inspector.is-collapsed .inspector-heading > .eyebrow { display: none; }
+  .sector-inspector.is-collapsed .inspector-content { display: none; }
+  .inspector-content { display: flex; }
   .sector-inspector h2 { margin-top: 14px; font-size: 22px; }
   .sector-description { min-height: auto; }
   .inspector-divider { margin: 14px 0; }

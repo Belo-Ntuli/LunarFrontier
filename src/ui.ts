@@ -28,6 +28,7 @@ const loadResult = loadColony();
 let colony: ColonySave | null = loadResult.colony;
 let screen: Screen = 'atlas';
 let inspectedSectorId = colony?.currentSector ?? 0;
+let sectorInspectorCollapsed = false;
 let moonScene: MoonScene | null = null;
 let saveMessage = loadResult.error;
 let toastMessage = '';
@@ -181,16 +182,18 @@ function sectorInspectorMarkup(sector: Sector): string {
 
 function globeScreenMarkup(): string {
   const currentSector = colony ? getSector(colony.currentSector) : null;
-  return appShell(`<main class="atlas-layout">
+  return appShell(`<main class="atlas-layout ${sectorInspectorCollapsed ? 'is-inspector-collapsed' : ''}">
     <aside class="atlas-sidebar panel">
       <div class="panel-heading">
-        <div><span class="eyebrow">MISSION MAP</span><h1>${colony ? 'Explore the Moon' : 'Choose your landing site'}</h1></div>
+        <div class="panel-heading-copy"><span class="eyebrow">MISSION MAP</span><h1>${colony ? 'Explore the Moon' : 'Choose your landing site'}</h1></div>
         <span class="sector-count">${colony ? `${colony.unlockedSectors.length} / 15` : '15 ZONES'}</span>
       </div>
-      <p class="sidebar-copy">${colony ? 'Select an unlocked outpost to manage it, or inspect a locked sector to plan an expedition.' : 'Select a hex sector to inspect the terrain and establish your first lunar outpost.'}</p>
-      <div class="sector-list" aria-label="Lunar sectors">${sectorListMarkup()}</div>
-      <div class="atlas-legend"><span><i class="legend-dot dot-home"></i> Outpost</span><span><i class="legend-dot dot-locked"></i> Unexplored</span></div>
-      ${colony ? `<button class="text-button new-colony-link" data-action="new-colony">＋ Start a new colony</button>` : ''}
+      <div class="atlas-sidebar-content">
+        <p class="sidebar-copy">${colony ? 'Select an unlocked outpost to manage it, or inspect a locked sector to plan an expedition.' : 'Select a hex sector to inspect the terrain and establish your first lunar outpost.'}</p>
+        <div class="sector-list" aria-label="Lunar sectors">${sectorListMarkup()}</div>
+        <div class="atlas-legend"><span><i class="legend-dot dot-home"></i> Outpost</span><span><i class="legend-dot dot-locked"></i> Unexplored</span></div>
+        ${colony ? `<button class="text-button new-colony-link" data-action="new-colony">＋ Start a new colony</button>` : ''}
+      </div>
     </aside>
     <section class="globe-stage" aria-label="Three-dimensional lunar atlas">
       <div class="stage-label"><span class="live-dot"></span> LUNAR SURFACE · 15 SECTORS</div>
@@ -199,9 +202,17 @@ function globeScreenMarkup(): string {
       <div class="globe-orbit orbit-one"></div><div class="globe-orbit orbit-two"></div>
       <div class="globe-caption"><span class="caption-line"></span><span>MOON · 1:1 SCALE MODEL</span></div>
     </section>
-    <aside class="sector-inspector panel" aria-live="polite">
-      ${sectorInspectorMarkup(getSector(inspectedSectorId))}
-      ${currentSector ? `<div class="current-sector-label"><span class="live-dot"></span> CURRENT OUTPOST <strong>${esc(currentSector.name)}</strong></div>` : ''}
+    <aside class="sector-inspector panel ${sectorInspectorCollapsed ? 'is-collapsed' : ''}" aria-live="polite">
+      <div class="inspector-heading">
+        <span class="eyebrow">SECTOR DETAILS</span>
+        <button class="column-toggle" type="button" data-action="toggle-sector-inspector"
+          aria-controls="sector-inspector-content" aria-expanded="${!sectorInspectorCollapsed}"
+          aria-label="${sectorInspectorCollapsed ? 'Show' : 'Hide'} sector details"><span aria-hidden="true">${sectorInspectorCollapsed ? '‹' : '›'}</span></button>
+      </div>
+      <div class="inspector-content" id="sector-inspector-content">
+        ${sectorInspectorMarkup(getSector(inspectedSectorId))}
+        ${currentSector ? `<div class="current-sector-label"><span class="live-dot"></span> CURRENT OUTPOST <strong>${esc(currentSector.name)}</strong></div>` : ''}
+      </div>
     </aside>
   </main>`);
 }
@@ -711,14 +722,30 @@ function hasSavedData(): boolean {
 }
 
 function renderInspector(): void {
-  const target = document.querySelector<HTMLElement>('.sector-inspector');
+  const target = document.querySelector<HTMLElement>('.inspector-content');
   if (!target) return;
   const sector = getSector(inspectedSectorId);
   const current = colony ? getSector(colony.currentSector) : null;
   target.innerHTML = `${sectorInspectorMarkup(sector)}${current ? `<div class="current-sector-label"><span class="live-dot"></span> CURRENT OUTPOST <strong>${esc(current.name)}</strong></div>` : ''}`;
 }
 
-function inspectSector(sectorId: number): void {
+function toggleSectorInspector(): void {
+  const isCollapsed = !sectorInspectorCollapsed;
+  sectorInspectorCollapsed = isCollapsed;
+
+  const panel = document.querySelector<HTMLElement>('.sector-inspector');
+  const layout = document.querySelector<HTMLElement>('.atlas-layout');
+  const button = panel?.querySelector<HTMLButtonElement>('[data-action="toggle-sector-inspector"]');
+
+  layout?.classList.toggle('is-inspector-collapsed', isCollapsed);
+  panel?.classList.toggle('is-collapsed', isCollapsed);
+  button?.setAttribute('aria-expanded', String(!isCollapsed));
+  button?.setAttribute('aria-label', `${isCollapsed ? 'Show' : 'Hide'} sector details`);
+  const icon = button?.querySelector('span');
+  if (icon) icon.textContent = isCollapsed ? '‹' : '›';
+}
+
+function inspectSector(sectorId: number, focusGlobe = true): void {
   inspectedSectorId = sectorId;
   document.querySelectorAll<HTMLElement>('.sector-row').forEach((row) => {
     const selected = Number(row.dataset.sector) === sectorId;
@@ -727,6 +754,7 @@ function inspectSector(sectorId: number): void {
   });
   renderInspector();
   moonScene?.update(colony, inspectedSectorId);
+  if (focusGlobe) moonScene?.focusSector(sectorId);
 }
 
 function persist(): void {
@@ -787,6 +815,9 @@ function handleAction(button: HTMLElement): void {
   const sectorId = Number(button.dataset.sector);
 
   switch (action) {
+    case 'toggle-sector-inspector':
+      toggleSectorInspector();
+      break;
     case 'inspect-sector':
       inspectSector(sectorId);
       break;
@@ -874,8 +905,7 @@ function render(): void {
           colony,
           inspectedSectorId,
           (sectorId) => {
-            inspectedSectorId = sectorId;
-            render();
+            inspectSector(sectorId, false);
           },
           (sectorId) => {
             if (sectorId !== null) {
@@ -913,6 +943,7 @@ export function startApplication(root: HTMLDivElement): void {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && colony && !colony.paused && !colony.failed) {
       persist();
+      moonScene?.setSimulationTime(colony.elapsedMs, true);
     }
   });
 
@@ -925,6 +956,7 @@ export function startApplication(root: HTMLDivElement): void {
       return;
     }
     colony = { ...colony, elapsedMs };
+    moonScene?.setSimulationTime(elapsedMs, true);
     const remaining = DAY_LENGTH_MS - elapsedMs;
     const timeLabel = document.querySelector<HTMLElement>('.time-left');
     const progressLabel = document.querySelector<HTMLElement>('.day-progress');

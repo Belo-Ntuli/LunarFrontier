@@ -39,9 +39,18 @@ The initial resource rates, building actions, exploration costs, and survival/fa
 
 - Represent the Moon as a round 3D planet.
 - Divide the globe into 15 individually selectable sectors that cover the surface.
-- Render sector boundaries as softly blended, irregular terrain transitions in the Moon's surface texture, like natural landforms on a globe. Do not draw polygon tiles, vector outlines, or a visible grid on the Moon.
-- Keep terrain-region colors subtle; use a clear surface tint to distinguish an unlocked, hovered, or selected region.
+- Render sector boundaries as softly blended, irregular terrain transitions in the Moon's surface texture, with very dark, depressed troughs and subtle walls that resemble natural ravines. Do not draw polygon tiles, vector outlines, or a visible grid on the Moon.
+- Add slightly more pronounced, raised 3D terrain details to each sector that reflect its short terrain description, such as crater rims, ridges, volcanic domes, rilles, and basin rings. Keep the relief restrained and fade it to zero at existing sector edges; do not change sector assignments, centers, or shapes.
+- Animate sunlight around the Moon's local axis over each 45-second in-game day. Keep the light attached to the globe so the day/night pattern stays aligned with its terrain when dragged or refocused, independent of the camera. The cycle advances only while the simulation is running and visible, and pauses with the simulation.
+- Show visible, softly twinkling star dots in the space background; keep them static when reduced-motion is requested.
+- Display a numbered name bubble slightly above each sector on the 3D globe, with a leader line ending in a surface dot. Labels follow the globe's orientation and are occluded on its far side.
+- Keep all sector landmasses the same base lunar color; use a clear surface tint to distinguish an unlocked, hovered, or selected region.
+- Preserve the existing sector centers and boundary shapes when changing terrain appearance.
 - Selecting a sector from the adjacent list must remain available as an alternative to interacting with the globe.
+- Selecting or keyboard-focusing a sector in the mission map smoothly rotates the globe to bring that sector into view; respect reduced-motion preferences.
+- The sector details panel can be collapsed and reopened with an accessible arrow control; the mission map remains visible.
+- From 901px and wider, keep the mission map and sector details beside the globe and size both sidebars to about two-thirds of their previous width, keeping their controls within the panels; narrower layouts may stack the details panel below the map and globe.
+- Highlight the selected sector in blue in both the sector list and the 3D overview.
 - Dragging rotates the Moon. The sector list remains an accessible alternative to pointer-based globe selection.
 - Show which sector is selected, unlocked, or locked with visually distinct states.
 - A sector should remain identifiable in both the globe overview and the 2D gameplay view.
@@ -72,10 +81,11 @@ Names are reproduced as supplied. Do not merge similarly named areas (for exampl
 
 ### 4.3 Sector interaction
 
-- **Hover/focus:** Highlight the sector on the surface and display its details.
+- **Hover/focus:** Highlight the sector on the surface and display its details. Hovering a globe sector slightly raises its interior while keeping the ravine boundary low.
 - **Locked sector details:** Show that the sector is locked and state the required materials and people needed to explore it.
 - **Unlocked sector details:** Show its status and provide a way to enter it.
 - **Select/click:** Selecting the starting sector begins the colony there. Selecting an unlocked sector enters its 2D gameplay view.
+- Selecting a sector directly on the globe updates its details without recreating the scene; keep the camera focused on that sector.
 - **Accessibility:** Hover effects must have equivalent keyboard-focus and touch/select interactions; essential information cannot be hover-only.
 - **Motion:** Sector lift and camera transitions should be brief and should not be required to understand state. Respect reduced-motion preferences.
 
@@ -237,9 +247,9 @@ The initial playable values above should be play-tested with students before the
 
 The initial implementation is ready for review when all of the following are true:
 
-1. The 3D overview presents a spherical Moon with 15 individually selectable, softly differentiated, naturally contoured terrain regions and no visible polygon grid or vector outlines.
+1. The 3D overview presents a spherical Moon with 15 individually selectable, naturally contoured landmasses in one shared lunar tone, separated by very dark, depressed ravine-like troughs, with no visible polygon grid or vector outlines.
 2. All 15 sectors appear with the exact roster names and can be individually inspected.
-3. Hovering a sector highlights its surface and reveals its details; touch users can access the same details by selection.
+3. Hovering a sector highlights and slightly raises its surface while revealing its details; touch users can access the same details by selection.
 4. A new colony lets the player choose any one of the 15 sectors as the starting location.
 5. Starting a colony creates a basic habitat in the selected sector, sets the population to 7, and leaves every other sector locked.
 6. A locked sector's inspection state clearly identifies it as locked and displays its material and people requirements.
@@ -256,5 +266,13 @@ The initial implementation is ready for review when all of the following are tru
 17. Sector gameplay panels use readable opaque surfaces; no backdrop blur obscures the map, resource values, or facility details.
 18. Facility cards explain their colony purpose, construction costs, daily output, and recurring resource use, and the field guide explains a relevant terrain and mission trade-off.
 19. The starting habitat and living quarters, along with each constructed facility, are visibly represented on the 2D sector surface. Building living quarters costs 20 Metal and 16 Lunar regolith and does not increase population.
+20. The sector details panel can be collapsed and reopened with an accessible arrow control, while the mission map remains visible; the selected sector is highlighted blue in the list and 3D globe.
+21. Selecting a sector in the mission map rotates the globe to show it; this transition respects reduced-motion preferences.
+22. Selecting a sector on the globe updates the selection and details without resetting the camera away from that sector.
+23. Each sector has restrained, visible 3D surface details that correspond to its terrain description, while existing sector shapes and ravine boundaries remain unchanged.
+24. Sunlight moves around the Moon's local axis over a 45-second in-game day, remains aligned with the globe's terrain when the globe is manipulated, and stops while the simulation is paused or the page is hidden.
+25. Background stars twinkle independently at a gentle, staggered pace and remain static for users who prefer reduced motion.
+26. Each visible sector on the 3D globe has a raised bubble showing its two-digit number and larger name, without a "Sector" prefix, connected to the sector by a line and surface dot; labels follow globe rotation and do not prevent sector selection.
+27. From 901px and wider, the atlas keeps the mission map, globe, and sector details in three columns, with each sidebar about two-thirds of its previous width and controls contained within them; narrower layouts can stack sector details beneath the map and globe.
 
 The economy, day length, and exploration costs are implemented as the initial values in this specification and should be adjusted only with corresponding UI, tests, and documentation updates.
