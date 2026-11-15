@@ -8,6 +8,11 @@ import {
 } from './game';
 
 const MOON_RADIUS = 3;
+export const DEFAULT_GLOBE_ZOOM = 0.8;
+export const MIN_GLOBE_ZOOM = 0.5;
+export const MAX_GLOBE_ZOOM = 1.6;
+const DEFAULT_CAMERA_DISTANCE = Math.hypot(0.4, 10.1);
+const GLOBE_ZOOM_STEP = 0.1;
 const COLORS = {
   available: '#55d6c5',
   selected: '#72b7ff',
@@ -49,9 +54,11 @@ interface TwinklingStars {
 }
 
 interface SectorLabel {
+  sectorId: number;
   sprite: THREE.Sprite;
   leader: THREE.Line;
   marker: THREE.Mesh;
+  statusIcon: THREE.Sprite;
   direction: THREE.Vector3;
 }
 
@@ -66,11 +73,12 @@ export class MoonScene {
   private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private readonly resizeObserver: ResizeObserver;
   private readonly onSelect: (sectorId: number) => void;
-  private readonly onHover: (sectorId: number | null) => void;
+  private readonly onZoomChange: (zoomLevel: number) => void;
   private readonly surface: LunarSurface;
   private readonly terrain: RavineTerrain;
   private readonly stars: TwinklingStars;
   private readonly sectorLabelTextures: THREE.CanvasTexture[] = [];
+  private readonly sectorStatusTextures: THREE.CanvasTexture[] = [];
   private readonly sectorLabels: SectorLabel[] = [];
   private readonly moon: THREE.Mesh;
   private colony: ColonySave | null;
@@ -88,18 +96,20 @@ export class MoonScene {
   private simulationElapsedMs = 0;
   private simulationAdvancing = false;
   private simulationAnchorTime = 0;
+  private zoomLevel = DEFAULT_GLOBE_ZOOM;
 
   constructor(
     mount: HTMLElement,
     colony: ColonySave | null,
     selectedId: number | null,
     onSelect: (sectorId: number) => void,
-    onHover: (sectorId: number | null) => void,
+    initialZoomLevel = DEFAULT_GLOBE_ZOOM,
+    onZoomChange: (zoomLevel: number) => void = () => {},
   ) {
     this.colony = colony;
     this.selectedId = selectedId;
     this.onSelect = onSelect;
-    this.onHover = onHover;
+    this.onZoomChange = onZoomChange;
     this.setSimulationTime(
       colony?.elapsedMs ?? 0,
       Boolean(colony && !colony.paused && !colony.failed),
@@ -113,10 +123,15 @@ export class MoonScene {
       'aria-label',
       'Interactive 3D Moon. Drag to rotate and select a sector. Warning symbols mark sectors with active hazards; use the sector list for details.',
     );
+    this.renderer.domElement.setAttribute(
+      'aria-label',
+      'Interactive 3D Moon. Drag to rotate and select a sector. Use the zoom buttons to adjust its size.',
+    );
     this.renderer.domElement.setAttribute('role', 'img');
     mount.appendChild(this.renderer.domElement);
 
     this.camera.position.set(0, 0.4, 10.1);
+    this.setZoomLevel(initialZoomLevel, false);
     this.scene.add(this.globe);
     this.globe.rotation.x = -0.08;
     this.surface = createLunarTexture();
@@ -134,6 +149,7 @@ export class MoonScene {
     this.addLighting();
     this.stars = this.addStars();
     this.addSectorLabels();
+    this.updateSectorStatusIcons();
     this.updateSurfaceTexture();
 
     this.renderer.domElement.addEventListener('pointerdown', this.handlePointerDown);
@@ -149,6 +165,7 @@ export class MoonScene {
   update(colony: ColonySave | null, selectedId: number | null): void {
     this.colony = colony;
     this.selectedId = selectedId;
+    this.updateSectorStatusIcons();
     this.setSimulationTime(
       colony?.elapsedMs ?? 0,
       Boolean(colony && !colony.paused && !colony.failed),
@@ -160,6 +177,14 @@ export class MoonScene {
     this.simulationElapsedMs = elapsedMs;
     this.simulationAdvancing = advancing && document.visibilityState === 'visible';
     this.simulationAnchorTime = performance.now();
+  }
+
+  zoomIn(): void {
+    this.setZoomLevel(this.zoomLevel + GLOBE_ZOOM_STEP);
+  }
+
+  zoomOut(): void {
+    this.setZoomLevel(this.zoomLevel - GLOBE_ZOOM_STEP);
   }
 
   focusSector(sectorId: number): void {
@@ -209,6 +234,7 @@ export class MoonScene {
       }
     });
     this.sectorLabelTextures.forEach((texture) => texture.dispose());
+    this.sectorStatusTextures.forEach((texture) => texture.dispose());
     this.renderer.dispose();
     canvas.remove();
   }
@@ -272,6 +298,10 @@ export class MoonScene {
 
   private addSectorLabels(): void {
     this.globe.updateMatrixWorld(true);
+    const homeTexture = createSectorStatusTexture('home');
+    const lockTexture = createSectorStatusTexture('lock');
+    this.sectorStatusTextures.push(homeTexture, lockTexture);
+
     for (const sector of SECTORS) {
       const canvas = document.createElement('canvas');
       canvas.width = 360;
@@ -360,11 +390,37 @@ export class MoonScene {
       marker.renderOrder = 2;
       this.globe.add(marker);
 
+      const statusIcon = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: this.colony?.unlockedSectors.includes(sector.id) ? homeTexture : lockTexture,
+          transparent: true,
+          depthTest: true,
+          depthWrite: false,
+        }),
+      );
+      statusIcon.position.copy(surfacePoint).addScaledVector(direction, 0.08);
+      statusIcon.scale.set(0.24, 0.24, 1);
+      statusIcon.renderOrder = 2;
+      this.globe.add(statusIcon);
+
       label.position.copy(bubblePosition);
       label.scale.set(0.9, 0.25, 1);
       label.renderOrder = 3;
       this.globe.add(label);
-      this.sectorLabels.push({ sprite: label, leader, marker, direction });
+      this.sectorLabels.push({ sectorId: sector.id, sprite: label, leader, marker, statusIcon, direction });
+    }
+  }
+
+  private updateSectorStatusIcons(): void {
+    const unlockedSectors = new Set(this.colony?.unlockedSectors ?? []);
+    const homeTexture = this.sectorStatusTextures[0];
+    const lockTexture = this.sectorStatusTextures[1];
+
+    for (const { sectorId, statusIcon } of this.sectorLabels) {
+      const material = statusIcon.material;
+      material.map = unlockedSectors.has(sectorId) ? homeTexture : lockTexture;
+      material.needsUpdate = true;
+      statusIcon.visible = this.colony !== null;
     }
   }
 
@@ -384,17 +440,17 @@ export class MoonScene {
       const weight = this.surface.boundaryWeights[pixel] / 255;
       const opacity = isHovered
         ? 0.34 * (0.4 + 0.6 * weight)
-        : isSelected
-          ? 0.24 * (0.4 + 0.6 * weight)
-          : isUnlocked
-            ? 0.16 * (0.4 + 0.6 * weight)
+        : isUnlocked
+          ? 0.16 * (0.4 + 0.6 * weight)
+          : isSelected
+            ? 0.24 * (0.4 + 0.6 * weight)
             : 0.22 * (0.4 + 0.6 * weight);
       const highlight = isHovered
         ? SURFACE_COLORS.hovered
-        : isSelected
-          ? SURFACE_COLORS.selected
-          : isUnlocked
-            ? SURFACE_COLORS.available
+        : isUnlocked
+          ? SURFACE_COLORS.available
+          : isSelected
+            ? SURFACE_COLORS.selected
             : SECTOR_COLOR;
       const offset = pixel * 4;
       const boundaryProximity = 1 - weight;
@@ -426,6 +482,13 @@ export class MoonScene {
     this.renderer.setSize(width, height, false);
   }
 
+  private setZoomLevel(zoomLevel: number, notify = true): void {
+    this.zoomLevel = THREE.MathUtils.clamp(zoomLevel, MIN_GLOBE_ZOOM, MAX_GLOBE_ZOOM);
+    const direction = this.camera.position.clone().normalize();
+    this.camera.position.copy(direction.multiplyScalar(DEFAULT_CAMERA_DISTANCE / this.zoomLevel));
+    if (notify) this.onZoomChange(this.zoomLevel);
+  }
+
   private animate = (time: number): void => {
     if (this.disposed) return;
     this.animationFrame = requestAnimationFrame(this.animate);
@@ -454,12 +517,13 @@ export class MoonScene {
   private updateSectorLabelVisibility(): void {
     const cameraDirection = this.camera.position.clone().normalize();
     const worldDirection = new THREE.Vector3();
-    for (const { sprite, leader, marker, direction } of this.sectorLabels) {
+    for (const { sprite, leader, marker, statusIcon, direction } of this.sectorLabels) {
       worldDirection.copy(direction).applyQuaternion(this.globe.quaternion);
       const visible = worldDirection.dot(cameraDirection) > 0.35;
       sprite.visible = visible;
       leader.visible = visible;
       marker.visible = visible;
+      statusIcon.visible = visible && this.colony !== null;
     }
   }
 
@@ -500,7 +564,6 @@ export class MoonScene {
     this.hoveredId = id;
     this.updateSurfaceTexture();
     this.updateHoveredElevation();
-    this.onHover(id);
   }
 
   private updateHoveredElevation(): void {
@@ -600,6 +663,64 @@ function spherePoint(latitude: number, longitude: number): THREE.Vector3 {
     Math.sin(lat),
     Math.cos(lat) * Math.cos(lon),
   );
+}
+
+function createSectorStatusTexture(type: 'home' | 'lock'): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Unable to create sector status icons.');
+
+  context.beginPath();
+  context.arc(64, 64, 59, 0, Math.PI * 2);
+  context.fillStyle = type === 'home' ? 'rgba(7, 18, 25, 0.94)' : 'rgba(230, 236, 242, 0.96)';
+  context.fill();
+  context.lineWidth = 5;
+  context.strokeStyle = type === 'home' ? COLORS.available : 'rgba(5, 9, 15, 0.9)';
+  context.stroke();
+
+  if (type === 'home') {
+    context.beginPath();
+    context.moveTo(15, 62);
+    context.lineTo(64, 21);
+    context.lineTo(113, 62);
+    context.lineTo(101, 62);
+    context.lineTo(101, 108);
+    context.lineTo(71, 108);
+    context.lineTo(71, 80);
+    context.lineTo(57, 80);
+    context.lineTo(57, 108);
+    context.lineTo(27, 108);
+    context.lineTo(27, 62);
+    context.closePath();
+    context.fillStyle = COLORS.available;
+    context.fill();
+    context.strokeStyle = 'rgba(5, 12, 16, 0.92)';
+    context.lineWidth = 6;
+    context.lineJoin = 'round';
+    context.stroke();
+    context.fillStyle = 'rgba(7, 18, 25, 0.94)';
+    context.fillRect(57, 80, 14, 28);
+  } else {
+    context.strokeStyle = '#070a0e';
+    context.lineWidth = 13;
+    context.lineCap = 'round';
+    context.beginPath();
+    context.arc(64, 49, 22, Math.PI, 0);
+    context.stroke();
+    context.fillStyle = '#070a0e';
+    context.fillRect(35, 49, 58, 55);
+    context.beginPath();
+    context.arc(64, 72, 5, 0, Math.PI * 2);
+    context.fillStyle = '#eef2f5';
+    context.fill();
+    context.fillRect(61, 74, 6, 15);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 function createLunarTexture(): LunarSurface {
