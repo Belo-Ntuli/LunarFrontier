@@ -113,8 +113,10 @@ Names are reproduced as supplied. Do not merge similarly named areas (for exampl
 - Newly unlocked sectors initially show an expedition site without a habitat; facilities can be constructed there after unlocking.
 - Players can develop or use additional sectors only after unlocking them.
 - The sector management view includes a prominent 2D surface map, operational status, facility construction controls, resource readouts, a terrain field guide, and a next-day timer. Gameplay panels use crisp opaque surfaces and do not blur the map or building information.
-- Render the 2D sector environment in a simple, crisp pixelated style rather than smooth vector artwork. Zoom toward the colony, use cool blue-gray tiled regolith and scattered terrain detail, and depict compact buildings with stepped pixel silhouettes, layered ring-like roof bands, and blocky lit details. Keep the landing or expedition site and interactive fieldwork locations accessible.
+- Render the 2D sector environment in a simple, crisp pixelated style rather than smooth vector artwork. Zoom toward the colony, use cool blue-gray tiled regolith and scattered terrain detail, and depict compact buildings with stepped pixel silhouettes, layered ring-like roof bands, and blocky lit details. Let players zoom the map in or out around the base and reset to the default view; keep fieldwork locations aligned and accessible.
 - The surface map shows constructed facilities and interactive fieldwork locations. Players can perform one field operation each lunar day from their current sector.
+- Facility construction starts a placement mode; players choose an open position on the surface map before costs are paid. Existing structures, the habitat/expedition site, and fieldwork locations cannot be overlapped. Arrow keys move the placement preview, Enter places it, and Escape cancels.
+- Facility locations persist in the colony save and remain attached to their sector when players zoom or reload.
 - A facility type can be built once per sector. Facilities do not require a separate habitat to be present in that sector.
 - Facility production and consumption are colony-wide, and materials are shared between unlocked sectors.
 - Provide a clear route back to the 3D overview without losing the current colony state.
@@ -132,6 +134,18 @@ Construction costs are spent immediately. Production and operating consumption a
 | Ice extractor | 20 | 12 | +10 Water | 3 Energy |
 | Oxygen recycler | 14 | 8 | +10 Oxygen | 2 Energy |
 | Regolith & metal mine | 16 | 14 | +4 Metal, +8 Lunar regolith | 5 Energy |
+| Solar panels | 8 | 6 | +8 Energy | None |
+| Nuclear power | 32 | 28 | +24 Energy | None; reactor fuel is not modeled separately |
+| Medical bay | 18 | 14 | Clinic service; health outcomes are not simulated | 1 Energy |
+| Oxygen plant | 22 | 16 | +14 Oxygen | 3 Energy |
+| Water plant | 24 | 20 | +14 Water | 4 Energy |
+| Soil farm | 16 | 14 | +5 Food | 1 Water, 1 Energy |
+| Hydroponic farm | 24 | 22 | +14 Food | 4 Water, 3 Energy |
+| Bug protein processor | 22 | 18 | +8 Food | 3 Food, 2 Energy |
+| Regolith collector | 12 | 10 | +10 Lunar regolith | 2 Energy |
+| Deep rock mining | 32 | 26 | +8 Metal, +4 Lunar regolith | 8 Energy |
+
+The requested Living Quarters option is already represented by the existing Living quarters facility and is not duplicated. New facility rates are balancing choices scaled against crew upkeep (1 Water, Food, and Oxygen per crew member per day, and 1 Energy per two crew members rounded up). The Soil farm uses less water and produces less food than the Hydroponic farm. The Bug protein processor consumes food as feedstock but has a larger food output.
 
 ### 6.2 Surface fieldwork
 
@@ -211,7 +225,7 @@ There is no inventory capacity limit in the current playable version. The starti
 - Save at least: selected starting sector, current sector, unlocked sectors, population, resource quantities, day, pause-independent simulation state, and completed/active progression state needed to resume.
 - Persist after colony creation, building, unlocking, day transitions, pause changes, and periodically during the day timer.
 - Store the game state in the browser under the versioned `lunar-frontier-save` local-storage key.
-- Include a save schema version so future game updates can identify and migrate prior saves. The current schema is version 2 and migrates existing version-1 colonies, preserving their progress.
+- Include a save schema version so future game updates can identify and migrate prior saves. The current schema is version 3 and migrates existing version-1 and version-2 colonies, preserving their progress and assigning existing facilities default map positions.
 - Handle unavailable storage, invalid JSON, and incompatible save versions explicitly. Do not silently overwrite a player's unreadable save with a new colony.
 - The game should provide a deliberate new-game/reset action with confirmation before replacing saved progress.
 
@@ -251,10 +265,11 @@ The initial implementation is ready for review when all of the following are tru
 12. Invalid, outdated, or unavailable local storage is handled with a clear user-facing message and without silently destroying existing progress.
 13. Players can perform one field operation per day; mineral prospecting is available in every unlocked sector, while ice-core drilling is limited to sectors marked with ice deposits.
 14. Fieldwork immediately spends the displayed Energy cost, yields the displayed resources, cannot be repeated in the same day, and becomes available again on the next day.
-15. A version-1 local save migrates to the current schema without losing colony progress.
+15. Version-1 and version-2 local saves migrate to the current schema without losing colony progress.
 16. The 2D sector screen presents the lunar surface map as its dominant play area, with a compact resource rail above it and construction controls beside it; the field guide and day timer are secondary.
 17. Sector gameplay panels use readable opaque surfaces; no backdrop blur obscures the map, resource values, or facility details.
 18. Facility cards explain their colony purpose, construction costs, daily output, and recurring resource use, and the field guide explains a relevant terrain and mission trade-off.
 19. The starting habitat and living quarters, along with each constructed facility, are visibly represented on the 2D sector surface. Building living quarters costs 20 Metal and 16 Lunar regolith and does not increase population.
+20. Players can choose a clear map location for each new facility; blocked locations are rejected, and chosen positions persist after reloading.
 
 The economy, day length, and exploration costs are implemented as the initial values in this specification and should be adjusted only with corresponding UI, tests, and documentation updates.

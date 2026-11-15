@@ -21,7 +21,7 @@ npm test
 npm run build
 ```
 
-The test suite covers colony initialization, facility construction, daily resource rules, survival failure, sector unlocking, daily fieldwork, and save validation/migration. The production build runs TypeScript checks before bundling.
+The test suite covers colony initialization, facility construction and placement, daily resource rules, survival failure, sector unlocking, daily fieldwork, and save validation/migration. The production build runs TypeScript checks before bundling.
 
 ## Project layout
 
@@ -34,4 +34,4 @@ The test suite covers colony initialization, facility construction, daily resour
 
 ## Save data
 
-The save key is `lunar-frontier-save`; its schema version is `2`. Version-1 colonies are migrated automatically to preserve existing progress. Use the in-game **Start a new colony** flow to replace an existing mission. Invalid saves are reported instead of being silently overwritten.
+The save key is `lunar-frontier-save`; its schema version is `3`. Version-1 and version-2 colonies are migrated automatically, preserving progress and assigning existing facilities default map positions. Use the in-game **Start a new colony** flow to replace an existing mission. Invalid saves are reported instead of being silently overwritten.
