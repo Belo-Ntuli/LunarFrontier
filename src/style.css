@@ -309,7 +309,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 .sector-row.is-selected.is-unlocked { background: rgba(85, 214, 197, 0.16); box-shadow: inset 2px 0 var(--teal); }
 .sector-index { width: 22px; color: #6d7a8d; font: 9px var(--mono); }
 .sector-row-copy { flex: 1; min-width: 0; display: grid; gap: 3px; }
-.sector-row-copy strong { overflow: hidden; color: #d7dfea; font-size: 10px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.sector-row-copy strong { min-width: 0; display: flex; align-items: center; gap: 4px; overflow: hidden; color: #d7dfea; font-size: 10px; font-weight: 500; }
+.sector-row-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sector-warning-indicator { width: 13px; height: 13px; flex: none; display: inline-grid; place-items: center; border: 1px solid rgba(255, 198, 94, .72); border-radius: 50%; color: #ffc65e; font-size: 9px; font-weight: 800; line-height: 1; }
 .sector-row-copy small { color: #657185; font: 8px var(--mono); letter-spacing: 0.08em; }
 .sector-state { color: #596777; font-size: 11px; }
 .is-unlocked .sector-state { color: var(--teal); }
@@ -736,9 +738,26 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 .impact-basin { fill: #292c2b; stroke: #443d35; stroke-width: 2; }
 .impact-debris { fill: #9c7956; stroke: #d0ad82; stroke-width: 1.5; }
 .meteorite-fragment { fill: #393a37; stroke: #d4a36a; stroke-width: 1.5; }
-.dust-storm-effect { position: absolute; z-index: 2; inset: 0; overflow: hidden; background: linear-gradient(110deg, transparent 7%, rgba(196,158,105,.14) 35%, rgba(223,190,143,.2) 53%, transparent 82%); mix-blend-mode: screen; pointer-events: none; }
-.dust-storm-effect::before, .dust-storm-effect::after { content: ''; position: absolute; inset: -35% -25%; background: repeating-linear-gradient(169deg, transparent 0 28px, rgba(220,190,148,.24) 29px 32px, transparent 33px 61px); animation: dust-storm-drift 5s ease-in-out infinite alternate; }
-.dust-storm-effect::after { opacity: .55; transform: translateY(13%); animation-delay: -2.5s; }
+.meteorite-arrival { position: absolute; z-index: 4; width: 0; height: 0; pointer-events: none; }
+.meteorite-streak { width: 36px; height: 36px; position: absolute; left: 0; top: 0; animation: meteorite-fall 2.8s linear both; }
+.meteorite-trail { width: 18px; height: 130px; position: absolute; left: -24px; top: -119px; background: linear-gradient(to bottom, transparent, rgba(246,102,47,.68) 58%, rgba(255,217,136,1)); filter: blur(1px); transform: rotate(-25deg); }
+.meteorite-projectile { width: 32px; height: 28px; position: absolute; left: -7px; top: -5px; background: radial-gradient(circle at 30% 28%, #fff0bd 0 11%, #f49b4d 29%, #77473a 64%, #272d30 100%); clip-path: polygon(20% 0, 76% 7%, 100% 42%, 71% 100%, 22% 89%, 0 42%); filter: drop-shadow(0 0 8px #ff8e48); }
+.meteorite-flash { width: 68px; height: 46px; position: absolute; left: -34px; top: -23px; border: 3px solid rgba(255,230,174,.9); border-radius: 50%; background: radial-gradient(ellipse, rgba(255,238,188,.9), rgba(235,127,66,.55) 42%, transparent 76%); opacity: 0; animation: meteorite-impact-flash 700ms ease-out 2.55s both; }
+@keyframes meteorite-fall {
+  0% { opacity: 0; transform: translate3d(-230px, -285px, 0) scale(.3) rotate(-20deg); }
+  8% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(0, 0, 0) scale(1.55) rotate(25deg); }
+}
+@keyframes meteorite-impact-flash {
+  0%, 30% { opacity: 0; transform: scale(.2); }
+  60% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.4); }
+}
+.dust-storm-effect { position: absolute; z-index: 2; inset: 0; overflow: hidden; background: linear-gradient(110deg, transparent 7%, rgba(196,158,105,.14) 35%, rgba(223,190,143,.2) 53%, transparent 82%); mix-blend-mode: screen; pointer-events: none; animation: dust-storm-lifetime var(--dust-storm-duration) linear both; animation-delay: var(--dust-storm-age); }
+.dust-storm-effect::before, .dust-storm-effect::after { content: ''; position: absolute; inset: -35% -25%; background: repeating-linear-gradient(169deg, transparent 0 28px, rgba(220,190,148,.24) 29px 32px, transparent 33px 61px); animation: dust-storm-drift 5s ease-in-out infinite alternate; animation-delay: var(--dust-storm-drift-delay); }
+.dust-storm-effect::after { opacity: .55; transform: translateY(13%); animation-delay: calc(var(--dust-storm-drift-delay) - 2.5s); }
+@keyframes dust-storm-lifetime { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes dust-storm-drift { from { transform: translate(-5%, 2%); } to { transform: translate(6%, -2%); } }
 .map-resource-site text { font-size: 9px; }
 .ice-resource-site circle { stroke: #a9e3ed; }
@@ -964,5 +983,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid #68dfd0; outline-offs
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .meteorite-arrival { display: none; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  .dust-storm-effect { animation-name: dust-storm-lifetime !important; animation-duration: var(--dust-storm-duration) !important; animation-timing-function: steps(1, end) !important; animation-fill-mode: both !important; }
+  .dust-storm-effect::before, .dust-storm-effect::after { animation: none !important; }
 }

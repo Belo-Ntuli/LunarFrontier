@@ -1,6 +1,7 @@
 export const STORAGE_KEY = 'lunar-frontier-save';
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 8;
 export const DAY_LENGTH_MS = 45_000;
+export const DUST_STORM_VISUAL_DURATION_MS = 60_000;
 
 const HAZARD_INTERVAL_MIN = 10;
 const HAZARD_INTERVAL_MAX = 15;
@@ -114,6 +115,8 @@ export interface HazardEvent {
   day: number;
   sectorId: number | null;
   buildingId: BuildingId | null;
+  dustStormVisualEndsAt?: number;
+  dustStormFailureDeadlineDay?: number;
 }
 
 export interface ColonySave {
@@ -560,6 +563,7 @@ const FACILITY_MAINTENANCE_COSTS: Partial<
 };
 
 const SOLAR_BUILDINGS: BuildingId[] = ['solar-panels'];
+const SOLAR_BUILDINGS: BuildingId[] = ['solar-panels'];
 
 function nextRandom(seed: number): { value: number; seed: number } {
   let next = seed >>> 0;
@@ -614,13 +618,35 @@ export function getHazardTitle(event: HazardEvent): string {
   }
 }
 
-export function getHazardDescription(event: HazardEvent): string {
+export function getHazardsForSector(
+  colony: ColonySave | null,
+  sectorId: number,
+): HazardEvent[] {
+  return (
+    colony?.hazardEvents.filter(
+      (event) => event.sectorId === sectorId || event.kind === 'dust-storm',
+    ) ?? []
+  );
+}
+
+export function getHazardDescription(
+  event: HazardEvent,
+  hasSolarPanels = true,
+  now = Date.now(),
+): string {
   const building = event.buildingId ? getBuilding(event.buildingId) : null;
   switch (event.kind) {
     case 'meteorite-impact':
       return `${building?.name ?? 'Infrastructure'} is damaged and offline until repaired.`;
     case 'dust-storm':
-      return 'Dust has reduced solar power output to 50%. Clean the panels to restore full output.';
+      if (event.dustStormVisualEndsAt !== undefined && now >= event.dustStormVisualEndsAt) {
+        return hasSolarPanels
+          ? 'The storm has passed, but solar panels remain dust-covered and produce 50% less energy until repaired.'
+          : 'The dust storm has passed. No solar panels were affected.';
+      }
+      return hasSolarPanels
+        ? 'Dust is sweeping across the surface. Solar panels produce 50% less energy until repaired.'
+        : 'Dust is sweeping across the surface. No solar panels are affected.';
     case 'solar-panel-maintenance':
       return `${building?.name ?? 'Solar panels'} are offline until cleaned or repaired.`;
     case 'structural-decay':
@@ -913,6 +939,12 @@ export function getDailyResourceRates(colony: ColonySave): Resources {
   return rates;
 }
 
+export function colonyHasSolarPanels(colony: ColonySave): boolean {
+  return colony.unlockedSectors.some((sectorId) =>
+    (colony.buildings[sectorId] ?? []).some((id) => SOLAR_BUILDINGS.includes(id)),
+  );
+}
+
 function maintenanceKindsFor(buildingId: BuildingId): HazardKind[] {
   const kinds: HazardKind[] = ['structural-decay'];
   if (SOLAR_BUILDINGS.includes(buildingId)) kinds.push('solar-panel-maintenance');
@@ -954,7 +986,7 @@ export function repairHazard(colony: ColonySave, eventId: number): ColonySave {
   };
 }
 
-export function advanceDay(colony: ColonySave): ColonySave {
+export function advanceDay(colony: ColonySave, now = Date.now()): ColonySave {
   if (colony.paused || colony.failed) return colony;
 
   const rates = getDailyResourceRates(colony);
@@ -970,17 +1002,48 @@ export function advanceDay(colony: ColonySave): ColonySave {
   const missingLifeSupport = (['water', 'food', 'oxygen', 'energy'] as const).find(
     (resource) => colony.resources[resource] + rates[resource] < 0,
   );
-  const failureReason = missingLifeSupport
-    ? `The crew ran out of ${RESOURCE_INFO[missingLifeSupport].label.toLowerCase()}.`
-    : '';
+  const nextDay = colony.day + 1;
+  const hasSolarPanels = colonyHasSolarPanels(colony);
+  let hazardEvents = colony.hazardEvents
+    .map((event) => {
+      if (
+        event.kind !== 'dust-storm' ||
+        !hasSolarPanels ||
+        (event.dustStormVisualEndsAt !== undefined && now < event.dustStormVisualEndsAt) ||
+        event.dustStormFailureDeadlineDay !== undefined
+      ) {
+        return event;
+      }
+      return { ...event, dustStormFailureDeadlineDay: nextDay + 2 };
+    })
+    .filter(
+      (event) =>
+        event.kind !== 'dust-storm' ||
+        hasSolarPanels ||
+        (event.dustStormVisualEndsAt !== undefined && now < event.dustStormVisualEndsAt),
+    );
+  const overdueHazard = hazardEvents.find(
+    (event) =>
+      (event.buildingId !== null && nextDay - event.day >= 2) ||
+      (event.kind === 'dust-storm' &&
+        hasSolarPanels &&
+        event.dustStormFailureDeadlineDay !== undefined &&
+        nextDay >= event.dustStormFailureDeadlineDay),
+  );
+  const failureReason = overdueHazard
+    ? `The crew died after ${getHazardTitle(overdueHazard).toLowerCase()} was left unresolved for 2 lunar days.`
+    : missingLifeSupport
+      ? `The crew ran out of ${RESOURCE_INFO[missingLifeSupport].label.toLowerCase()}.`
+      : '';
   const nextColony: ColonySave = {
     ...colony,
     resources,
-    day: colony.day + 1,
+    day: nextDay,
     elapsedMs: 0,
     paused: Boolean(failureReason),
     failed: Boolean(failureReason),
     failureReason,
+    hazardEvents,
   };
   if (failureReason) return nextColony;
 
@@ -990,7 +1053,6 @@ export function advanceDay(colony: ColonySave): ColonySave {
     randomSeed = result.seed;
     return result.value;
   };
-  let hazardEvents = [...colony.hazardEvents];
   let hazardProgress = colony.hazardProgress;
   let hazardInterval = colony.hazardInterval;
   let nextHazardId = colony.nextHazardId;
@@ -1002,12 +1064,9 @@ export function advanceDay(colony: ColonySave): ColonySave {
     hazardProgress += colony.unlockedSectors.length;
     if (hazardProgress >= hazardInterval) {
       const intactBuildings = getIntactBuildings(colony, hazardEvents);
-      const hasSolarFacility = colony.unlockedSectors.some((sectorId) =>
-        (colony.buildings[sectorId] ?? []).some((id) => SOLAR_BUILDINGS.includes(id)),
-      );
       const possibleHazards: HazardKind[] = [];
       if (intactBuildings.length > 0) possibleHazards.push('meteorite-impact');
-      if (hasSolarFacility) possibleHazards.push('dust-storm');
+      possibleHazards.push('dust-storm');
       if (possibleHazards.length > 0) {
         const kind = possibleHazards[Math.floor(random() * possibleHazards.length)];
         const target =
@@ -1020,6 +1079,9 @@ export function advanceDay(colony: ColonySave): ColonySave {
           day: nextColony.day,
           sectorId: target?.sectorId ?? null,
           buildingId: target?.buildingId ?? null,
+          ...(kind === 'dust-storm'
+            ? { dustStormVisualEndsAt: now + DUST_STORM_VISUAL_DURATION_MS }
+            : {}),
         });
       }
       hazardProgress = 0;
@@ -1124,6 +1186,44 @@ export function validateSave(value: unknown): ColonySave {
   const rawSave = removeDiscontinuedFacilities(value) as Partial<ColonySave> & { version?: number };
   const sourceVersion = rawSave.version;
   if (
+    typeof sourceVersion !== 'number' ||
+    ![1, 2, 3, 4, 5, 6, 7, SAVE_VERSION].includes(sourceVersion)
+  ) {
+    throw new Error(`Unsupported save version: ${String(sourceVersion)}.`);
+  }
+
+  const placementValues =
+    rawSave.buildingPlacements &&
+    typeof rawSave.buildingPlacements === 'object' &&
+    !Array.isArray(rawSave.buildingPlacements)
+      ? Object.values(rawSave.buildingPlacements)
+      : [];
+  const hasCurrentPlacementFormat =
+    placementValues.length > 0 && placementValues.every(Array.isArray);
+  const buildingPlacements =
+    sourceVersion <= 2 || (sourceVersion <= 4 && !hasCurrentPlacementFormat)
+      ? migrateBuildingPlacements(
+          rawSave.buildings,
+          rawSave.buildingPlacements,
+          sourceVersion >= 3 && rawSave.buildingPlacements !== undefined,
+        )
+      : rawSave.buildingPlacements;
+
+  const hazardFields = [
+    'hazardEvents',
+    'hazardProgress',
+    'hazardInterval',
+    'randomSeed',
+    'nextHazardId',
+  ] as const;
+  const presentHazardFields = hazardFields.filter((field) =>
+    Object.prototype.hasOwnProperty.call(rawSave, field),
+  ).length;
+  if (
+    (presentHazardFields !== 0 && presentHazardFields !== hazardFields.length) ||
+    (sourceVersion === SAVE_VERSION && presentHazardFields !== hazardFields.length)
+  const sourceVersion = rawSave.version;
+  if (
     sourceVersion !== 1 &&
     sourceVersion !== 2 &&
     sourceVersion !== 3 &&
@@ -1131,9 +1231,46 @@ export function validateSave(value: unknown): ColonySave {
     sourceVersion !== 5 &&
     sourceVersion !== SAVE_VERSION
   ) {
+    throw new Error('Save data is incomplete or invalid.');
+  }
+
+  const hasHazardState = presentHazardFields === hazardFields.length;
     throw new Error(`Unsupported save version: ${String(sourceVersion)}.`);
   }
   const save: Partial<ColonySave> =
+    sourceVersion === SAVE_VERSION
+      ? rawSave
+      : {
+          ...rawSave,
+          version: SAVE_VERSION,
+          lastFieldworkDay: sourceVersion === 1 ? 0 : rawSave.lastFieldworkDay,
+          buildingPlacements,
+          ...(sourceVersion <= 4
+            ? { starterTutorialSeen: rawSave.starterTutorialSeen ?? false }
+            : {}),
+          ...(sourceVersion < SAVE_VERSION && hasHazardState
+            ? {
+                hazardEvents: rawSave.hazardEvents?.map((event) =>
+                  event.kind === 'dust-storm' && event.dustStormVisualEndsAt === undefined
+                    ? { ...event, dustStormVisualEndsAt: 0 }
+                    : event,
+                ),
+              }
+            : {}),
+          ...(!hasHazardState
+            ? {
+                hazardEvents: [],
+                hazardProgress: 0,
+                hazardInterval:
+                  HAZARD_INTERVAL_MIN + (((rawSave.startingSector ?? 0) % 6) + 6) % 6,
+                randomSeed:
+                  (((rawSave.startingSector ?? 0) + 1) * 0x9e37_79b1 +
+                    (rawSave.day ?? 1)) >>>
+                    0 || 1,
+                nextHazardId: 1,
+              }
+            : {}),
+        };
     sourceVersion === SAVE_VERSION
       ? rawSave
       : {
@@ -1277,10 +1414,25 @@ export function validateSave(value: unknown): ColonySave {
       environmentHazardCount += 1;
     }
     if (event.kind === 'dust-storm') {
-      if (event.sectorId !== null || event.buildingId !== null) {
+      if (
+        event.sectorId !== null ||
+        event.buildingId !== null ||
+        typeof event.dustStormVisualEndsAt !== 'number' ||
+        !Number.isFinite(event.dustStormVisualEndsAt) ||
+        (event.dustStormFailureDeadlineDay !== undefined &&
+          (typeof event.dustStormFailureDeadlineDay !== 'number' ||
+            !Number.isInteger(event.dustStormFailureDeadlineDay) ||
+            event.dustStormFailureDeadlineDay < event.day))
+      ) {
         throw new Error('Save data contains invalid hazard targets.');
       }
       continue;
+    }
+    if (
+      event.dustStormVisualEndsAt !== undefined ||
+      event.dustStormFailureDeadlineDay !== undefined
+    ) {
+      throw new Error('Save data contains invalid hazard events.');
     }
     if (
       typeof event.sectorId !== 'number' ||

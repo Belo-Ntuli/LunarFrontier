@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BUILDINGS,
+  DUST_STORM_VISUAL_DURATION_MS,
   SECTORS,
   advanceDay,
   buildStructure,
@@ -11,6 +12,7 @@ import {
   createSolarFlareHazard,
   getDailyResourceRates,
   getHazardCost,
+  getHazardsForSector,
   getMaintenanceChance,
   isValidBuildingPlacement,
   performFieldwork,
@@ -234,6 +236,133 @@ describe('Lunar Frontier game rules', () => {
     expect(nextDay.failureReason).toContain('water');
   });
 
+  it('ends the mission when a building hazard remains unresolved for two lunar days', () => {
+    const colony = {
+      ...createColony(4),
+      hazardEvents: [
+        {
+          id: 1,
+          kind: 'structural-decay' as const,
+          day: 1,
+          sectorId: 4,
+          buildingId: 'habitat' as const,
+        },
+      ],
+      nextHazardId: 2,
+    };
+
+    const afterOneDay = advanceDay(colony);
+    expect(afterOneDay.day).toBe(2);
+    expect(afterOneDay.failed).toBe(false);
+
+    const overdue = advanceDay(afterOneDay);
+    expect(overdue.day).toBe(3);
+    expect(overdue.failed).toBe(true);
+    expect(overdue.paused).toBe(true);
+    expect(overdue.failureReason).toContain('2 lunar days');
+  });
+
+  it('does not treat a visual-only dust storm as an overdue structure hazard', () => {
+    const now = 100_000;
+    const colony = {
+      ...createColony(4),
+      hazardEvents: [
+        {
+          id: 1,
+          kind: 'dust-storm' as const,
+          day: 1,
+          sectorId: null,
+          buildingId: null,
+          dustStormVisualEndsAt: now + DUST_STORM_VISUAL_DURATION_MS,
+        },
+      ],
+      nextHazardId: 2,
+    };
+
+    const duringStorm = advanceDay(colony, now + 45_000);
+    expect(duringStorm.hazardEvents).toHaveLength(1);
+    const afterStorm = advanceDay(duringStorm, now + 90_000);
+    expect(afterStorm.day).toBe(3);
+    expect(afterStorm.hazardEvents.some((event) => event.kind === 'dust-storm')).toBe(false);
+    expect(afterStorm.failed).toBe(false);
+  });
+
+  it('associates targeted and global hazards with globe sector warnings', () => {
+    const built = buildStructure(createColony(4), 'solar-panels');
+    const colony = {
+      ...built,
+      unlockedSectors: [4, 5],
+      buildings: { ...built.buildings, 5: ['habitat' as const] },
+      hazardEvents: [
+        {
+          id: 1,
+          kind: 'structural-decay' as const,
+          day: 1,
+          sectorId: 4,
+          buildingId: 'solar-panels' as const,
+        },
+        {
+          id: 2,
+          kind: 'meteorite-impact' as const,
+          day: 1,
+          sectorId: 5,
+          buildingId: 'habitat' as const,
+        },
+        {
+          id: 3,
+          kind: 'dust-storm' as const,
+          day: 1,
+          sectorId: null,
+          buildingId: null,
+          dustStormVisualEndsAt: 60_000,
+        },
+      ],
+      nextHazardId: 4,
+    };
+
+    expect(getHazardsForSector(colony, 4).map((event) => event.id)).toEqual([1, 3]);
+    expect(getHazardsForSector(colony, 5).map((event) => event.id)).toEqual([2, 3]);
+    expect(getHazardsForSector(colony, 6).map((event) => event.id)).toEqual([3]);
+  });
+
+  it('starts the solar-storm failure deadline after its visuals end', () => {
+    const now = 100_000;
+    const colony = {
+      ...buildStructure(createColony(4), 'solar-panels'),
+      hazardEvents: [
+        {
+          id: 1,
+          kind: 'dust-storm' as const,
+          day: 1,
+          sectorId: null,
+          buildingId: null,
+          dustStormVisualEndsAt: now + DUST_STORM_VISUAL_DURATION_MS,
+        },
+      ],
+      nextHazardId: 2,
+      hazardInterval: 100,
+      randomSeed: 0x8000_0000,
+    };
+
+    const duringStorm = advanceDay(colony, now + 45_000);
+    expect(duringStorm.failed).toBe(false);
+    expect(duringStorm.hazardEvents[0].dustStormFailureDeadlineDay).toBeUndefined();
+
+    const firstPostStormDay = advanceDay(duringStorm, now + 90_000);
+    expect(firstPostStormDay.day).toBe(3);
+    expect(firstPostStormDay.failed).toBe(false);
+    expect(firstPostStormDay.hazardEvents[0].dustStormFailureDeadlineDay).toBe(5);
+
+    const onePostStormDay = advanceDay(firstPostStormDay, now + 135_000);
+    expect(onePostStormDay.day).toBe(4);
+    expect(onePostStormDay.failed).toBe(false);
+
+    const overdue = advanceDay(onePostStormDay, now + 180_000);
+    expect(overdue.day).toBe(5);
+    expect(overdue.failed).toBe(true);
+    expect(overdue.failureReason).toContain('dust storm');
+  });
+
   it('scales maintenance risk linearly with unlocked sectors and caps it at certainty', () => {
     expect(getMaintenanceChance(1)).toBe(0.2);
     expect(getMaintenanceChance(3)).toBeCloseTo(0.6);
@@ -245,12 +374,47 @@ describe('Lunar Frontier game rules', () => {
     expect(createSolarFlareHazard()).toBeNull();
   });
 
+  it('can generate a visual-only dust storm without solar panels', () => {
+    const colony = {
+      ...createColony(4),
+      hazardInterval: 10,
+      hazardProgress: 9,
+      randomSeed: 0x8000_0000,
+    };
+
+    expect(colony.buildings[4]).not.toContain('solar-panels');
+    const now = 100_000;
+    const nextDay = advanceDay(colony, now);
+    expect(nextDay.hazardEvents).toContainEqual(
+      expect.objectContaining({
+        kind: 'dust-storm',
+        day: 2,
+        sectorId: null,
+        buildingId: null,
+        dustStormVisualEndsAt: now + DUST_STORM_VISUAL_DURATION_MS,
+      }),
+    );
+
+    const withoutStorm = {
+      ...nextDay,
+      hazardEvents: nextDay.hazardEvents.filter((event) => event.kind !== 'dust-storm'),
+    };
+    expect(getDailyResourceRates(nextDay)).toEqual(getDailyResourceRates(withoutStorm));
+  });
+
   it('reduces solar output during dust storms and restores it when repaired', () => {
     const built = buildStructure(createColony(4), 'solar-panels');
     const storm = {
       ...built,
       hazardEvents: [
-        { id: 1, kind: 'dust-storm' as const, day: 1, sectorId: null, buildingId: null },
+        {
+          id: 1,
+          kind: 'dust-storm' as const,
+          day: 1,
+          sectorId: null,
+          buildingId: null,
+          dustStormVisualEndsAt: 0,
+        },
       ],
       nextHazardId: 2,
     };
@@ -258,6 +422,7 @@ describe('Lunar Frontier game rules', () => {
     expect(validateSave(storm)).toEqual(storm);
     expect(getDailyResourceRates(storm).energy).toBe(14);
     const repaired = repairHazard(storm, 1);
+    expect(repaired.resources).toMatchObject({ metal: 109, regolith: 119 });
     expect(repaired.resources).toMatchObject({ metal: 109, regolith: 119 });
     expect(getDailyResourceRates(repaired).energy).toBe(18);
   });
@@ -291,6 +456,7 @@ describe('Lunar Frontier game rules', () => {
       repairHazard({ ...damaged, failed: true, paused: true }, 1),
     ).toThrow('mission has ended');
     const repaired = repairHazard(damaged, 1);
+    expect(repaired.resources).toMatchObject({ metal: 109, regolith: 119 });
     expect(repaired.resources).toMatchObject({ metal: 109, regolith: 119 });
     expect(getDailyResourceRates(repaired).energy).toBe(18);
   });
@@ -499,51 +665,96 @@ describe('Lunar Frontier game rules', () => {
   });
 
   it('migrates version-two facility saves and assigns their existing buildings map locations', () => {
-    const { buildingPlacements: _buildingPlacements, ...versionTwoSave } = createColony(4);
+    const {
+      buildingPlacements: _buildingPlacements,
+      hazardEvents: _hazardEvents,
+      hazardProgress: _hazardProgress,
+      hazardInterval: _hazardInterval,
+      randomSeed: _randomSeed,
+      nextHazardId: _nextHazardId,
+      starterTutorialSeen: _starterTutorialSeen,
+      ...versionTwoSave
+    } = createColony(4);
     const restored = validateSave({
       ...versionTwoSave,
       version: 2,
       buildings: { 4: ['habitat', 'solar-array', 'regolith-mine', 'water-plant', 'hydroponics'] },
     });
 
-    expect(restored.version).toBe(6);
+    expect(restored.version).toBe(8);
     expect(restored.buildings[4]).toEqual(['habitat', 'hydroponics']);
     expect(restored.buildingPlacements[4]).toEqual([
       { buildingId: 'hydroponics', x: 70 / 250, y: 46 / 160 },
     ]);
+    expect(restored.hazardEvents).toEqual([]);
     expect(restored.people).toBe(7);
   });
 
   it('migrates version-three facility placements without moving the buildings', () => {
     const placed = buildStructure(createColony(4), 'solar-panels', { x: 0.15, y: 0.8 });
-    const { buildingPlacements: _buildingPlacements, ...versionThreeSave } = placed;
+    const {
+      buildingPlacements: _buildingPlacements,
+      hazardEvents: _hazardEvents,
+      hazardProgress: _hazardProgress,
+      hazardInterval: _hazardInterval,
+      randomSeed: _randomSeed,
+      nextHazardId: _nextHazardId,
+      starterTutorialSeen: _starterTutorialSeen,
+      ...versionThreeSave
+    } = placed;
     const restored = validateSave({
       ...versionThreeSave,
       version: 3,
       buildingPlacements: { 4: { 'solar-panels': { x: 0.15, y: 0.8 } } },
     });
 
-    expect(restored.version).toBe(6);
+    expect(restored.version).toBe(8);
     expect(restored.buildingPlacements[4]).toEqual([
       { buildingId: 'solar-panels', x: 0.15, y: 0.8 },
     ]);
+    expect(restored.hazardInterval).toBe(14);
   });
 
-  it('migrates version-four saves and preserves their facility placements', () => {
+  it('migrates version-four hazard saves and preserves their facility placements and schedule', () => {
     const placed = buildStructure(createColony(4), 'medical-bay', { x: 0.15, y: 0.8 });
-    const { starterTutorialSeen: _starterTutorialSeen, ...versionFourSave } = placed;
-    const restored = validateSave({ ...versionFourSave, version: 4 });
+    const versionFourSave = {
+      ...placed,
+      version: 4,
+      hazardEvents: [
+        {
+          id: 1,
+          kind: 'structural-decay' as const,
+          day: 1,
+          sectorId: 4,
+          buildingId: 'medical-bay' as const,
+        },
+      ],
+      nextHazardId: 2,
+    };
+    const { starterTutorialSeen: _starterTutorialSeen, ...legacyVersionFourSave } =
+      versionFourSave;
+    const restored = validateSave(legacyVersionFourSave);
 
-    expect(restored.version).toBe(6);
+    expect(restored.version).toBe(8);
     expect(restored.starterTutorialSeen).toBe(false);
     expect(restored.buildingPlacements[4]).toEqual([
       { buildingId: 'medical-bay', x: 0.15, y: 0.8 },
     ]);
+    expect(restored.hazardEvents).toEqual(versionFourSave.hazardEvents);
+    expect(restored.nextHazardId).toBe(2);
   });
 
   it('removes discontinued facilities from version-five saves and their placements', () => {
+    const {
+      hazardEvents: _hazardEvents,
+      hazardProgress: _hazardProgress,
+      hazardInterval: _hazardInterval,
+      randomSeed: _randomSeed,
+      nextHazardId: _nextHazardId,
+      ...versionFiveColony
+    } = createColony(4);
     const restored = validateSave({
-      ...createColony(4),
+      ...versionFiveColony,
       version: 5,
       starterTutorialSeen: true,
       buildings: { 4: ['habitat', 'solar-array', 'regolith-mine', 'water-plant', 'solar-panels'] },
@@ -557,22 +768,67 @@ describe('Lunar Frontier game rules', () => {
       },
     });
 
-    expect(restored.version).toBe(6);
+    expect(restored.version).toBe(8);
     expect(restored.starterTutorialSeen).toBe(true);
     expect(restored.buildings[4]).toEqual(['habitat', 'solar-panels']);
     expect(restored.buildingPlacements[4]).toEqual([
       { buildingId: 'solar-panels', x: 0.45, y: 0.8 },
     ]);
+    expect(restored.hazardEvents).toEqual([]);
+  });
+
+  it('migrates version-six saves without hazards and keeps their tutorial progress', () => {
+    const {
+      hazardEvents: _hazardEvents,
+      hazardProgress: _hazardProgress,
+      hazardInterval: _hazardInterval,
+      randomSeed: _randomSeed,
+      nextHazardId: _nextHazardId,
+      ...versionSixColony
+    } = createColony(4);
+    const restored = validateSave({
+      ...versionSixColony,
+      version: 6,
+      starterTutorialSeen: true,
+    });
+
+    expect(restored.version).toBe(8);
+    expect(restored.hazardEvents).toEqual([]);
+    expect(restored.starterTutorialSeen).toBe(true);
+  });
+
+  it('migrates version-seven storms as already visually expired', () => {
+    const restored = validateSave({
+      ...createColony(4),
+      version: 7,
+      hazardEvents: [
+        { id: 1, kind: 'dust-storm', day: 1, sectorId: null, buildingId: null },
+      ],
+      nextHazardId: 2,
+    });
+
+    expect(restored.version).toBe(8);
+    expect(restored.hazardEvents[0]).toMatchObject({
+      kind: 'dust-storm',
+      dustStormVisualEndsAt: 0,
+    });
   });
 
   it('migrates existing version-one saves without losing the colony', () => {
     const {
       lastFieldworkDay: _lastFieldworkDay,
       buildingPlacements: _buildingPlacements,
+      hazardEvents: _hazardEvents,
+      hazardProgress: _hazardProgress,
+      hazardInterval: _hazardInterval,
+      randomSeed: _randomSeed,
+      nextHazardId: _nextHazardId,
+      starterTutorialSeen: _starterTutorialSeen,
       ...versionOneSave
     } = createColony(4);
     const restored = validateSave({ ...versionOneSave, version: 1 });
 
+    expect(restored.version).toBe(8);
     expect(restored.version).toBe(6);
     expect(restored.lastFieldworkDay).toBe(0);
     expect(restored.people).toBe(7);
@@ -590,6 +846,7 @@ describe('Lunar Frontier game rules', () => {
     } = createColony(4);
     const restored = validateSave({ ...versionThreeSave, version: 3 });
 
+    expect(restored.version).toBe(8);
     expect(restored.version).toBe(6);
     expect(restored.hazardEvents).toEqual([]);
     expect(restored.hazardProgress).toBe(0);
