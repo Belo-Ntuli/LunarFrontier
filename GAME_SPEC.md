@@ -175,9 +175,10 @@ Environmental hazards:
 
 - The first environmental event is scheduled after a random 10–15 sector-days. Each unlocked sector adds one sector-day of hazard pressure per lunar day, shortening the interval linearly; no more than one environmental event may be active at a time.
 - **Meteorite impact:** damages one intact structure, taking it offline until repaired for 2 Metal and 4 Lunar regolith.
-- **Dust storm:** reduces output from all Solar arrays and Solar panels to 50% until the panels are cleaned for 1 Metal and 1 Lunar regolith.
-- A warning sign appears over any building with an active targeted maintenance or meteorite-damage event and disappears when that event is repaired.
-- An active meteorite impact is shown as a crater and debris beside its damaged structure; an active dust storm appears as drifting dust over the sector surface map.
+- **Dust storm:** can occur whether or not the colony has Solar panels. Drifting surface visuals last one real-time minute. When panels exist, their output is reduced to 50% until repaired for 1 Metal and 1 Lunar regolith, including after the visuals end; without panels, the storm is visual-only, has no production effect, and clears after its visuals end.
+- A warning sign appears over any building with an active targeted maintenance or meteorite-damage event and disappears when that event is repaired. An alert symbol appears beside the name of each affected sector on the 3D globe; global dust storms mark every sector. The accessible sector list announces the active hazard names as well.
+- Any building-targeted maintenance or meteorite-damage event left unresolved through two lunar-day transitions after it appears causes mission failure and crew death. For a dust storm affecting built Solar panels, that two-day deadline starts after the one-minute visual phase ends. Pausing suspends these gameplay deadlines; dust storms without Solar panels are visual-only and do not start a deadline.
+- When a meteorite impact first appears in its affected sector, a clearly visible, roughly 3.3-second meteorite-fall and impact-flash sequence plays with a continuous trajectory. The crater and debris remain beside the damaged structure until repaired; users who prefer reduced motion still see the static impact marker. An active dust storm appears as drifting dust over the sector surface map, fading out after one minute even if the player pauses or leaves the view.
 - **Solar flare:** intentionally has no active event behavior yet. The future handler is reserved for NASA DONKI solar-flare data ([NASA APIs](https://api.nasa.gov/) and [CCMC DONKI](https://ccmc.gsfc.nasa.gov/tools/DONKI/)); the current game makes no NASA API requests and does not model radiation treatment. Future health effects may consult [NASA's Open Science Data Repository](https://osdr.nasa.gov/bio/repo/search?q=radiation%20on%20moon&data_source=cgene,alsda,esa&data_type=study), but are not simulated yet.
 
 Maintenance hazards:
@@ -264,8 +265,7 @@ There is no inventory capacity limit in the current playable version. The starti
 - Save at least: selected starting sector, current sector, unlocked sectors, population, resource quantities, day, pause-independent simulation state, and completed/active progression state needed to resume.
 - Persist after colony creation, building, unlocking, day transitions, pause changes, and periodically during the day timer.
 - Store the game state in the browser under the versioned `lunar-frontier-save` local-storage key.
-- Include a save schema version so future game updates can identify and migrate prior saves. The current schema is version 6 and migrates existing version-1 through version-5 colonies, preserving colony progress and remaining facility locations.
-- Include a save schema version so future game updates can identify and migrate prior saves. The current schema is version 4 and migrates existing version-1, version-2, and version-3 colonies, preserving their progress, assigning existing facilities default map positions where needed, and initializing hazard state for older saves.
+- Include a save schema version so future game updates can identify and migrate prior saves. The current schema is version 8 and migrates version-1 through version-7 colonies, preserving progress and facility locations, preserving existing hazard state when present, and initializing hazard state for older saves. Dust-storm visual end times and post-visual failure deadlines are persisted.
 - Handle unavailable storage, invalid JSON, and incompatible save versions explicitly. Do not silently overwrite a player's unreadable save with a new colony.
 - The game should provide a deliberate new-game/reset action with confirmation before replacing saved progress.
 
@@ -305,8 +305,7 @@ The initial implementation is ready for review when all of the following are tru
 12. Invalid, outdated, or unavailable local storage is handled with a clear user-facing message and without silently destroying existing progress.
 13. Players can perform one field operation per day; mineral prospecting is available in every unlocked sector, while ice-core drilling is limited to sectors marked with ice deposits.
 14. Fieldwork immediately spends the displayed Energy cost, yields the displayed resources, cannot be repeated in the same day, and becomes available again on the next day.
-15. Version-1 through version-5 local saves migrate to the current schema without losing colony progress.
-15. Version-1, version-2, and version-3 local saves migrate to the current schema without losing colony progress.
+15. Version-1 through version-7 local saves migrate to the current schema without losing colony progress.
 16. The 2D sector screen presents the lunar surface map as its dominant play area, with a compact resource rail above it and construction controls beside it; the field guide and day timer are secondary.
 17. Sector gameplay panels use readable opaque surfaces; no backdrop blur obscures the map, resource values, or facility details.
 18. Facility cards explain their colony purpose, construction costs, daily output, and recurring resource use, and the field guide explains a relevant terrain and mission trade-off.
@@ -321,12 +320,13 @@ The initial implementation is ready for review when all of the following are tru
 27. Each sector has visible 3D surface details that correspond to its terrain description, while existing sector shapes and ravine boundaries remain unchanged.
 28. Sunlight moves around the Moon's local axis over a 45-second in-game day, remains aligned with the globe's terrain when the globe is manipulated, and stops while the simulation is paused or the page is hidden.
 29. Background stars twinkle independently at a gentle, staggered pace and remain static for users who prefer reduced motion.
-30. Each visible sector on the 3D globe has a raised bubble showing its two-digit number and larger name, without a "Sector" prefix, connected to the sector by a line and surface dot; labels follow globe rotation and do not prevent sector selection.
+30. Each visible sector on the 3D globe has a raised bubble showing its two-digit number and larger name, without a "Sector" prefix, connected to the sector by a line and surface dot; labels follow globe rotation and do not prevent sector selection. A visible alert symbol appears beside a sector name while a targeted hazard affects it or a global dust storm is active, and the accessible sector list identifies active hazards.
 31. From 901px and wider, the atlas keeps the mission map, globe, and sector details in three columns, with compact sidebars around 160–205px wide and controls contained within them; narrower layouts can stack sector details beneath the map and globe.
-21. Environment events occur after randomized 10–15 sector-day intervals, accelerated linearly by unlocked sectors; a meteorite damages infrastructure and a dust storm reduces solar output to 50%. No two environment events overlap.
-22. Each built structure has a 20% daily maintenance chance per unlocked sector, capped at 100%; separate structures can accumulate issues, and the specified repairs spend the correct resources and restore their facilities.
-23. A damaged or maintained structure is excluded from daily production and operating use until repaired; the hazard board shows active issues and repair costs on both screens.
-24. Solar-flare generation remains an empty placeholder for future NASA DONKI integration; no NASA request or radiation-treatment behavior is active in this version.
-25. Version-1, version-2, and version-3 saves migrate to version 4 without losing colony progress; active version-4 hazards and the hazard schedule survive reloads.
+32. Environment events occur after randomized 10–15 sector-day intervals, accelerated linearly by unlocked sectors; a meteorite damages infrastructure and visibly animates falling onto it for roughly 3.3 seconds on a continuous trajectory, while a dust storm reduces solar output to 50%. No two environment events overlap, and reduced-motion preferences suppress the meteorite animation.
+33. Each built structure has a 20% daily maintenance chance per unlocked sector, capped at 100%; separate structures can accumulate issues, and the specified repairs spend the correct resources and restore their facilities.
+34. A damaged or maintained structure is excluded from daily production and operating use until repaired; the hazard board shows active issues and repair costs on both screens.
+35. Solar-flare generation remains an empty placeholder for future NASA DONKI integration; no NASA request or radiation-treatment behavior is active in this version.
+36. Version-1 through version-7 saves migrate to version 8 without losing colony progress; existing hazard state and schedules are preserved, older saves receive initialized hazard state, and prior dust storms are treated as visually expired.
+37. An unresolved building-targeted maintenance or meteorite-damage event causes mission failure at the second lunar-day transition after it appears. A dust storm affecting built Solar panels starts its two-day failure deadline only after its one-minute visuals end; the 50% production penalty persists until repair, while visual-only storms expire without triggering failure. The mission report identifies the unresolved hazard.
 
 The economy, day length, exploration costs, and hazard frequencies are initial balancing values and should be adjusted only with corresponding UI, tests, and documentation updates.

@@ -1,5 +1,11 @@
 import * as THREE from 'three';
-import { DAY_LENGTH_MS, SECTORS, type ColonySave, type SectorRelief } from './game';
+import {
+  DAY_LENGTH_MS,
+  SECTORS,
+  getHazardsForSector,
+  type ColonySave,
+  type SectorRelief,
+} from './game';
 
 const MOON_RADIUS = 3;
 const COLORS = {
@@ -103,7 +109,10 @@ export class MoonScene {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.domElement.className = 'moon-canvas';
-    this.renderer.domElement.setAttribute('aria-label', 'Interactive 3D Moon. Drag to rotate and select a sector.');
+    this.renderer.domElement.setAttribute(
+      'aria-label',
+      'Interactive 3D Moon. Drag to rotate and select a sector. Warning symbols mark sectors with active hazards; use the sector list for details.',
+    );
     this.renderer.domElement.setAttribute('role', 'img');
     mount.appendChild(this.renderer.domElement);
 
@@ -269,6 +278,8 @@ export class MoonScene {
       canvas.height = 96;
       const context = canvas.getContext('2d');
       if (!context) throw new Error('Unable to create lunar sector labels.');
+      const hasWarning = getHazardsForSector(this.colony, sector.id).length > 0;
+      const warningSpace = hasWarning ? 30 : 0;
 
       context.fillStyle = 'rgba(8, 15, 27, 0.82)';
       context.strokeStyle = 'rgba(153, 191, 222, 0.76)';
@@ -286,11 +297,19 @@ export class MoonScene {
       let nameSize = 30;
       context.fillStyle = '#f2f6fa';
       context.font = `700 ${nameSize}px system-ui, sans-serif`;
-      while (context.measureText(sector.name).width > canvas.width - 28 && nameSize > 16) {
+      while (
+        context.measureText(sector.name).width > canvas.width - 28 - warningSpace &&
+        nameSize > 16
+      ) {
         nameSize -= 1;
         context.font = `700 ${nameSize}px system-ui, sans-serif`;
       }
-      context.fillText(sector.name, canvas.width / 2, 68);
+      const nameWidth = context.measureText(sector.name).width;
+      const nameCenter = canvas.width / 2 - warningSpace / 2;
+      context.fillText(sector.name, nameCenter, 68);
+      if (hasWarning) {
+        drawWarningIndicator(context, nameCenter + nameWidth / 2 + 19, 68);
+      }
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -541,6 +560,36 @@ export class MoonScene {
   private handlePointerLeave = (): void => {
     if (!this.pointerDown) this.setHovered(null);
   };
+}
+
+function drawWarningIndicator(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+): void {
+  context.save();
+  context.fillStyle = '#ffc65e';
+  context.strokeStyle = '#785018';
+  context.lineWidth = 1.5;
+  context.beginPath();
+  context.moveTo(x, y - 12);
+  context.lineTo(x + 11, y + 9);
+  context.lineTo(x - 11, y + 9);
+  context.closePath();
+  context.fill();
+  context.stroke();
+  context.strokeStyle = '#30220d';
+  context.lineWidth = 2;
+  context.lineCap = 'round';
+  context.beginPath();
+  context.moveTo(x, y - 5);
+  context.lineTo(x, y + 1);
+  context.stroke();
+  context.fillStyle = '#30220d';
+  context.beginPath();
+  context.arc(x, y + 5, 1.25, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
 }
 
 function spherePoint(latitude: number, longitude: number): THREE.Vector3 {
