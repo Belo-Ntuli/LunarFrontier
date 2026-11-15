@@ -7,6 +7,7 @@ import {
   canPerformFieldwork,
   canUnlock,
   createColony,
+  isValidBuildingPlacement,
   performFieldwork,
   unlockSector,
   validateSave,
@@ -42,6 +43,20 @@ describe('Lunar Frontier game rules', () => {
     expect(BUILDINGS.find((building) => building.id === 'ice-extractor')?.metal).toBe(20);
   });
 
+  it('saves a chosen facility location and rejects blocked or out-of-map spots', () => {
+    const colony = createColony(4);
+    const placement = { x: 0.15, y: 0.8 };
+
+    expect(isValidBuildingPlacement(colony, placement)).toBe(true);
+    const built = buildStructure(colony, 'solar-panels', placement);
+    expect(built.buildingPlacements[4]['solar-panels']).toEqual(placement);
+    expect(() => buildStructure(colony, 'solar-panels', { x: 0.5, y: 85 / 160 })).toThrow(
+      'open map location',
+    );
+    expect(() => buildStructure(built, 'medical-bay', placement)).toThrow('open map location');
+    expect(isValidBuildingPlacement(colony, { x: 0, y: 0.5 })).toBe(false);
+  });
+
   it('builds living quarters without changing the colony population', () => {
     const colony = createColony(4);
     const built = buildStructure(colony, 'living-quarters');
@@ -50,6 +65,53 @@ describe('Lunar Frontier game rules', () => {
     expect(built.resources.regolith).toBe(104);
     expect(built.buildings[4]).toContain('living-quarters');
     expect(built.people).toBe(7);
+  });
+
+  it('builds each new facility as a separate option', () => {
+    const newBuildings = [
+      'solar-panels',
+      'nuclear-power',
+      'medical-bay',
+      'oxygen-plant',
+      'water-plant',
+      'soil-farm',
+      'hydroponic-farm',
+      'bug-protein-processor',
+      'regolith-collector',
+      'deep-rock-mining',
+    ] as const;
+
+    for (const buildingId of newBuildings) {
+      const built = buildStructure(createColony(4), buildingId);
+      expect(built.buildings[4]).toContain(buildingId);
+    }
+  });
+
+  it('balances the two farms by water and applies the protein processor food cycle', () => {
+    const soilFarm = BUILDINGS.find((building) => building.id === 'soil-farm')!;
+    const hydroponicFarm = BUILDINGS.find((building) => building.id === 'hydroponic-farm')!;
+    const proteinProcessor = BUILDINGS.find((building) => building.id === 'bug-protein-processor')!;
+
+    expect(soilFarm.consumption.water).toBeLessThan(hydroponicFarm.consumption.water!);
+    expect(soilFarm.production.food).toBeLessThan(hydroponicFarm.production.food!);
+    expect(proteinProcessor.production.food).toBeGreaterThan(proteinProcessor.consumption.food!);
+
+    const processed = advanceDay(buildStructure(createColony(4), 'bug-protein-processor'));
+    expect(processed.resources.food).toBe(70);
+  });
+
+  it('applies new power and life-support production on day transition', () => {
+    let colony = createColony(4);
+    for (const buildingId of ['solar-panels', 'nuclear-power', 'oxygen-plant', 'water-plant'] as const) {
+      colony = buildStructure(colony, buildingId);
+    }
+
+    const nextDay = advanceDay(colony);
+    expect(nextDay.resources).toMatchObject({
+      energy: 115,
+      water: 78,
+      oxygen: 79,
+    });
   });
 
   it('applies daily production and crew consumption', () => {
@@ -146,11 +208,29 @@ describe('Lunar Frontier game rules', () => {
     expect(() => validateSave({ ...colony, people: -1 })).toThrow('invalid colony values');
   });
 
+  it('migrates version-two facility saves and assigns their existing buildings map locations', () => {
+    const { buildingPlacements: _buildingPlacements, ...versionTwoSave } = createColony(4);
+    const restored = validateSave({
+      ...versionTwoSave,
+      version: 2,
+      buildings: { 4: ['habitat', 'solar-array', 'hydroponics'] },
+    });
+
+    expect(restored.version).toBe(3);
+    expect(restored.buildingPlacements[4]['solar-array']).toEqual({ x: 70 / 250, y: 46 / 160 });
+    expect(restored.buildingPlacements[4].hydroponics).toEqual({ x: 98 / 250, y: 46 / 160 });
+    expect(restored.people).toBe(7);
+  });
+
   it('migrates existing version-one saves without losing the colony', () => {
-    const { lastFieldworkDay: _lastFieldworkDay, ...versionOneSave } = createColony(4);
+    const {
+      lastFieldworkDay: _lastFieldworkDay,
+      buildingPlacements: _buildingPlacements,
+      ...versionOneSave
+    } = createColony(4);
     const restored = validateSave({ ...versionOneSave, version: 1 });
 
-    expect(restored.version).toBe(2);
+    expect(restored.version).toBe(3);
     expect(restored.lastFieldworkDay).toBe(0);
     expect(restored.people).toBe(7);
     expect(restored.buildings[4]).toEqual(['habitat']);
