@@ -18,6 +18,7 @@ import {
   getHazardTitle,
   getMaintenanceChance,
   getSector,
+  isFirstBuildFree,
   isValidBuildingPlacement,
   loadColony,
   performFieldwork,
@@ -38,55 +39,89 @@ const loadResult = loadColony();
 let colony: ColonySave | null = loadResult.colony;
 let screen: Screen = 'atlas';
 let inspectedSectorId = colony?.currentSector ?? 0;
+let sectorInspectorCollapsed = false;
 let moonScene: MoonScene | null = null;
 let saveMessage = loadResult.error;
 let toastMessage = '';
 let toastTimeout = 0;
 let pendingBuildingId: BuildingId | null = null;
 let placementCursor: BuildingPlacement | null = null;
+let starterTutorialVisible = false;
 const BASE_MAP_ZOOM = 1.35;
 const MIN_MAP_ZOOM = 0.75;
 const MAX_MAP_ZOOM = 2.4;
 const MAP_ZOOM_STEP = 0.15;
 let mapZoom = BASE_MAP_ZOOM;
+let crewAnimationFrame: number | null = null;
+
+interface CrewStop {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;
+}
+
+interface CrewWalker {
+  x: number;
+  y: number;
+  startX: number;
+  startY: number;
+  targetX: number;
+  targetY: number;
+  controlX: number;
+  controlY: number;
+  progress: number;
+  duration: number;
+  idleUntil: number;
+  currentStop: string;
+  targetStop: string;
+  suit: string;
+  trim: string;
+  visor: string;
+  phase: number;
+}
+
+const CREW_PALETTE = [
+  { suit: '#d8d1b8', trim: '#d48755', visor: '#78c6ce' },
+  { suit: '#c4d2cb', trim: '#d5b560', visor: '#8ac8d9' },
+  { suit: '#c9c4d8', trim: '#9e83c2', visor: '#79c5cc' },
+  { suit: '#d4c7b5', trim: '#c36c64', visor: '#85c9c2' },
+  { suit: '#bbcbd6', trim: '#7fa96f', visor: '#e5c573' },
+  { suit: '#d5c9c0', trim: '#6f9cae', visor: '#d8c17a' },
+  { suit: '#c6d0bc', trim: '#c18b54', visor: '#77b9c9' },
+];
 
 const BUILDING_PURPOSE: Record<BuildingId, string> = {
   habitat: 'Keeps the crew sheltered.',
-  'living-quarters': 'Adds local crew shelter.',
-  'solar-array': 'Adds power for more systems.',
+  'living-quarters': 'Adds homes for more crew.',
   'solar-panels': 'Adds supplemental solar power.',
-  'nuclear-power': 'Provides steady, high-output power.',
+  'nuclear-power': 'Makes steady power day and night.',
   'medical-bay': 'Provides an on-site clinic.',
   hydroponics: 'Turns water and power into food.',
   'oxygen-plant': 'Produces breathable oxygen.',
-  'water-plant': 'Processes water for the colony.',
   'ice-extractor': 'Uses power to replenish water.',
   'oxygen-recycler': 'Supports breathable air.',
   'soil-farm': 'Grows food with low water use.',
-  'hydroponic-farm': 'Produces a larger food harvest.',
-  'bug-protein-processor': 'Turns food feedstock into more food.',
+  'hydroponic-farm': 'Grows more food.',
+  'bug-protein-processor': 'Uses some food to make more food.',
   'regolith-collector': 'Collects material for construction.',
-  'regolith-mine': 'Replenishes materials for expansion.',
   'deep-rock-mining': 'Extracts metal from deeper deposits.',
 };
 
 const BUILDING_ICONS: Record<BuildingId, string> = {
   habitat: '⌂',
   'living-quarters': '⌂',
-  'solar-array': 'ϟ',
   'solar-panels': '☼',
   'nuclear-power': '☢',
   'medical-bay': '✚',
   hydroponics: '✳',
   'oxygen-plant': '◌',
-  'water-plant': '◉',
   'ice-extractor': '◉',
   'oxygen-recycler': '◌',
   'soil-farm': '♧',
   'hydroponic-farm': '✳',
   'bug-protein-processor': '♙',
   'regolith-collector': '◇',
-  'regolith-mine': '⬡',
   'deep-rock-mining': '⬡',
 };
 
@@ -201,6 +236,25 @@ function hudMarkup(): string {
     </div>`;
 }
 
+function starterTutorialMarkup(): string {
+  if (!colony || !starterTutorialVisible || colony.failed) return '';
+  return `<div class="starter-tutorial-overlay">
+    <section class="starter-tutorial-card" role="dialog" aria-modal="true" aria-labelledby="starter-tutorial-title" aria-describedby="starter-tutorial-description">
+      <span class="eyebrow">COLONY STARTER · CONSTRUCTION BRIEFING</span>
+      <h2 id="starter-tutorial-title">Four starter facilities are free</h2>
+      <p id="starter-tutorial-description">Your first placement of each facility below costs no Metal or Lunar regolith. This allowance is one per facility for the entire colony.</p>
+      <ul>
+        <li><span>Crew homes</span><strong>FIRST FREE</strong></li>
+        <li><span>Solar panels</span><strong>FIRST FREE</strong></li>
+        <li><span>Soil farm</span><strong>FIRST FREE</strong></li>
+        <li><span>Ice drill</span><strong>FIRST FREE</strong></li>
+      </ul>
+      <p class="starter-tutorial-note">Further copies cost the materials shown on their build cards.</p>
+      <button class="button button-primary" data-action="dismiss-starter-tutorial">GOT IT · START BUILDING</button>
+    </section>
+  </div>`;
+}
+
 function appShell(content: string): string {
   const activeSector = colony ? getSector(colony.currentSector) : null;
   return `<div class="app-shell ${screen === 'sector' ? 'sector-mode' : ''}">
@@ -222,6 +276,7 @@ function appShell(content: string): string {
     ${colony?.failed ? `<div class="mission-over" role="alert">
       <div class="mission-over-card"><span class="eyebrow">MISSION REPORT · DAY ${colony.day}</span><h2>Outpost lost</h2><p>${esc(colony.failureReason)}</p><p class="muted">Your crew survived ${Math.max(0, colony.day - 1)} full days. Try a different landing site or build life-support systems sooner.</p><button class="button button-primary" data-action="new-colony">PLAN A NEW MISSION <span>↗</span></button></div>
     </div>` : ''}
+    ${starterTutorialMarkup()}
     ${content}
     <footer class="footer-note"><span>✦</span> A learning simulation. Resource rates and terrain are simplified for play.</footer>
   </div>`;
@@ -284,16 +339,18 @@ function sectorInspectorMarkup(sector: Sector): string {
 
 function globeScreenMarkup(): string {
   const currentSector = colony ? getSector(colony.currentSector) : null;
-  return appShell(`<main class="atlas-layout">
+  return appShell(`<main class="atlas-layout ${sectorInspectorCollapsed ? 'is-inspector-collapsed' : ''}">
     <aside class="atlas-sidebar panel">
       <div class="panel-heading">
-        <div><span class="eyebrow">MISSION MAP</span><h1>${colony ? 'Explore the Moon' : 'Choose your landing site'}</h1></div>
+        <div class="panel-heading-copy"><span class="eyebrow">MISSION MAP</span><h1>${colony ? 'Explore the Moon' : 'Choose your landing site'}</h1></div>
         <span class="sector-count">${colony ? `${colony.unlockedSectors.length} / 15` : '15 ZONES'}</span>
       </div>
-      <p class="sidebar-copy">${colony ? 'Select an unlocked outpost to manage it, or inspect a locked sector to plan an expedition.' : 'Select a hex sector to inspect the terrain and establish your first lunar outpost.'}</p>
-      <div class="sector-list" aria-label="Lunar sectors">${sectorListMarkup()}</div>
-      <div class="atlas-legend"><span><i class="legend-dot dot-home"></i> Outpost</span><span><i class="legend-dot dot-locked"></i> Unexplored</span></div>
-      ${colony ? `<button class="text-button new-colony-link" data-action="new-colony">＋ Start a new colony</button>` : ''}
+      <div class="atlas-sidebar-content">
+        <p class="sidebar-copy">${colony ? 'Select an unlocked outpost to manage it, or inspect a locked sector to plan an expedition.' : 'Select a hex sector to inspect the terrain and establish your first lunar outpost.'}</p>
+        <div class="sector-list" aria-label="Lunar sectors">${sectorListMarkup()}</div>
+        <div class="atlas-legend"><span><i class="legend-dot dot-home"></i> Outpost</span><span><i class="legend-dot dot-locked"></i> Unexplored</span></div>
+        ${colony ? `<button class="text-button new-colony-link" data-action="new-colony">＋ Start a new colony</button>` : ''}
+      </div>
     </aside>
     <section class="globe-stage" aria-label="Three-dimensional lunar atlas">
       <div class="stage-label"><span class="live-dot"></span> LUNAR SURFACE · 15 SECTORS</div>
@@ -302,9 +359,17 @@ function globeScreenMarkup(): string {
       <div class="globe-orbit orbit-one"></div><div class="globe-orbit orbit-two"></div>
       <div class="globe-caption"><span class="caption-line"></span><span>MOON · 1:1 SCALE MODEL</span></div>
     </section>
-    <aside class="sector-inspector panel" aria-live="polite">
-      ${sectorInspectorMarkup(getSector(inspectedSectorId))}
-      ${currentSector ? `<div class="current-sector-label"><span class="live-dot"></span> CURRENT OUTPOST <strong>${esc(currentSector.name)}</strong></div>` : ''}
+    <aside class="sector-inspector panel ${sectorInspectorCollapsed ? 'is-collapsed' : ''}" aria-live="polite">
+      <div class="inspector-heading">
+        <span class="eyebrow">SECTOR DETAILS</span>
+        <button class="column-toggle" type="button" data-action="toggle-sector-inspector"
+          aria-controls="sector-inspector-content" aria-expanded="${!sectorInspectorCollapsed}"
+          aria-label="${sectorInspectorCollapsed ? 'Show' : 'Hide'} sector details"><span aria-hidden="true">${sectorInspectorCollapsed ? '‹' : '›'}</span></button>
+      </div>
+      <div class="inspector-content" id="sector-inspector-content">
+        ${sectorInspectorMarkup(getSector(inspectedSectorId))}
+        ${currentSector ? `<div class="current-sector-label"><span class="live-dot"></span> CURRENT OUTPOST <strong>${esc(currentSector.name)}</strong></div>` : ''}
+      </div>
     </aside>
   </main>`);
 }
@@ -323,17 +388,21 @@ function dailyFlowMarkup(): string {
 function buildingCardMarkup(buildingId: BuildingId): string {
   const building = BUILDINGS.find((item) => item.id === buildingId)!;
   const placed = colony?.buildings[colony.currentSector] ?? [];
-  const built = placed.includes(building.id);
+  const builtCount = placed.filter((id) => id === building.id).length;
+  const built = builtCount > 0;
+  const firstBuildFree = colony ? isFirstBuildFree(colony, building.id) : false;
   const isPlacing = pendingBuildingId === building.id;
   const affordable = colony
-    ? colony.resources.metal >= building.metal &&
-      colony.resources.regolith >= building.regolith
+    ? firstBuildFree ||
+      (colony.resources.metal >= building.metal &&
+        colony.resources.regolith >= building.regolith)
     : false;
   const rates = Object.entries(building.production)
     .map(([resource, amount]) => `+${amount} ${RESOURCE_INFO[resource as ResourceKey].label}/day`)
     .join(' · ');
-  const costs =
-    building.metal || building.regolith
+  const costs = firstBuildFree
+    ? `<span class="cost-free">FIRST ONE FREE</span><span>Then ${building.metal} Metal</span><span>Then ${building.regolith} Regolith</span>`
+    : building.metal || building.regolith
       ? `<span class="${colony && colony.resources.metal >= building.metal ? 'cost-met' : 'cost-missing'}">${building.metal} Metal</span><span class="${colony && colony.resources.regolith >= building.regolith ? 'cost-met' : 'cost-missing'}">${building.regolith} Regolith</span>`
       : 'Included with your landing';
   const yieldLabel = rates || (building.id === 'living-quarters'
@@ -343,12 +412,12 @@ function buildingCardMarkup(buildingId: BuildingId): string {
       : 'Facility support');
   return `<article class="building-card ${built ? 'building-built' : ''}">
     <div class="building-icon icon-${building.id}">${BUILDING_ICONS[building.id]}</div>
-    <div class="building-copy"><div class="building-title-row"><h3>${esc(building.name)}</h3>${built ? '<span class="built-label">BUILT</span>' : ''}</div>
+    <div class="building-copy"><div class="building-title-row"><h3>${esc(building.name)}</h3>${built ? `<span class="built-label">${builtCount} BUILT</span>` : ''}</div>
       <p>${esc(BUILDING_PURPOSE[building.id])} ${esc(building.description)}</p>
       <div class="building-yield">${yieldLabel}${Object.keys(building.consumption).length ? ` · uses ${Object.entries(building.consumption).map(([key, amount]) => `${amount} ${RESOURCE_INFO[key as ResourceKey].label}/day`).join(', ')}` : ''}</div>
       <div class="building-cost">${costs}</div>
     </div>
-    <button class="build-button ${built ? 'is-built' : affordable ? '' : 'is-unaffordable'} ${isPlacing ? 'is-placing' : ''}" data-action="${isPlacing ? 'cancel-placement' : 'build'}" data-building="${building.id}" ${built || !affordable ? 'disabled' : ''} aria-label="${built ? 'Already built' : isPlacing ? `Cancel placing ${building.name}` : `Choose a location for ${building.name}`}">${built ? 'BUILT' : isPlacing ? 'CANCEL' : affordable ? 'PLACE' : 'NEED'}</button>
+    <button class="build-button ${affordable ? '' : 'is-unaffordable'} ${isPlacing ? 'is-placing' : ''}" data-action="${isPlacing ? 'cancel-placement' : 'build'}" data-building="${building.id}" ${!affordable ? 'disabled' : ''} aria-label="${isPlacing ? `Cancel placing ${building.name}` : built ? `Place another ${building.name}` : `Choose a location for ${building.name}`}">${isPlacing ? 'CANCEL' : affordable ? 'PLACE' : 'NEED'}</button>
   </article>`;
 }
 
@@ -370,6 +439,9 @@ function sectorResourceMarkup(): string {
   }).join('');
 }
 
+function habitatMarkup(crew: number): string {
+  return `<g class="colony-structure habitat-structure" transform="translate(500 342)" role="img" aria-label="Starter shelter with crew homes">
+    <title>Starter shelter and crew homes</title>
 function buildingWarningMarkup(hazard: HazardEvent | undefined, x: number, y: number): string {
   if (!hazard) return '';
   return `<g class="building-warning-sign" transform="translate(${x} ${y})" aria-hidden="true">
@@ -415,6 +487,7 @@ function habitatMarkup(crew: number, hazard?: HazardEvent): string {
     <rect class="quarter-window" x="87" y="-17" width="26" height="15" rx="1"/>
     <rect class="quarter-window" x="87" y="6" width="26" height="12" rx="1"/>
     <circle class="habitat-beacon" cx="0" cy="-50" r="4"/>
+    <text class="structure-label" x="0" y="80">STARTER SHELTER · ${crew} CREW</text>
     <text class="structure-label" x="0" y="80">HABITAT + QUARTERS · ${crew} CREW</text>
     ${meteoriteImpactMarkup(hazard, 108, 40)}
     ${buildingWarningMarkup(hazard, 126, -49)}
@@ -424,6 +497,7 @@ function habitatMarkup(crew: number, hazard?: HazardEvent): string {
 function facilityStructureMarkup(
   buildingId: BuildingId,
   placement: BuildingPlacement,
+  instanceNumber: number,
   hazard?: HazardEvent,
 ): string {
   const x = placement.x * 1000;
@@ -436,62 +510,66 @@ function facilityStructureMarkup(
     ? `${shell}<path class="building-wall" d="M0 -27 V27 M-42 0 H42"/>
        <path class="warm-window" d="M-32 -19 H-15 M11 -19 H30 M-31 10 H-14 M13 10 H31"/>
        <rect class="habitat-door" x="-7" y="-7" width="14" height="14" rx="1"/>
-       <text class="structure-label" x="0" y="37">LIVING QUARTERS</text>`
-    : buildingId === 'solar-array' || buildingId === 'solar-panels'
+       <text class="structure-label" x="0" y="37">CREW HOMES</text>`
+    : buildingId === 'solar-panels'
       ? `<rect class="solar-panel" x="-58" y="-29" width="44" height="58" rx="1"/>
          <rect class="solar-panel" x="14" y="-29" width="44" height="58" rx="1"/>
          <path class="solar-cell-line" d="M-43 -29 V29 M-28 -29 V29 M-58 -10 H-14 M-58 9 H-14 M29 -29 V29 M44 -29 V29 M14 -10 H58 M14 9 H58"/>
          <path class="solar-frame" d="M-8 -24 V24 M8 -24 V24 M-8 0 H8"/>
-         <text class="structure-label" x="0" y="36">${buildingId === 'solar-array' ? 'SOLAR ARRAY' : 'SOLAR PANELS'}</text>`
+         <text class="structure-label" x="0" y="36">SOLAR PANELS</text>`
       : buildingId === 'nuclear-power'
         ? `${shell}<rect class="nuclear-vessel" x="-28" y="-23" width="56" height="46" rx="2"/>
            <rect class="reactor-core" x="-9" y="-9" width="18" height="18"/>
            <path class="reactor-pipe" d="M-22 -15 H-34 V-24 M22 -15 H34 V-24 M-22 15 H-34 V24 M22 15 H34 V24"/>
-           <text class="structure-label" x="0" y="36">NUCLEAR POWER</text>`
+           <text class="structure-label" x="0" y="36">NUCLEAR PLANT</text>`
         : buildingId === 'medical-bay'
           ? `${shell}<rect class="medical-roof" x="-31" y="-23" width="62" height="46" rx="1"/>
              <path class="medical-cross" d="M0 -15 V15 M-15 0 H15"/>
              <rect class="facility-door" x="-7" y="17" width="14" height="10"/>
-             <text class="structure-label" x="0" y="36">MEDICAL BAY</text>`
+             <text class="structure-label" x="0" y="36">MEDICAL CLINIC</text>`
           : buildingId === 'oxygen-plant'
             ? `${shell}<rect class="recycler-tank" x="-30" y="-21" width="23" height="42" rx="2"/>
                <rect class="recycler-tank tank-secondary" x="7" y="-21" width="23" height="42" rx="2"/>
                <path class="oxygen-pipe" d="M-18 -21 V-28 H18 V-21 M-7 0 H7"/>
-               <text class="structure-label" x="0" y="36">OXYGEN PLANT</text>`
-            : buildingId === 'water-plant'
-              ? `${shell}<rect class="water-vessel" x="-27" y="-24" width="54" height="48" rx="2"/>
-                 <path class="water-level" d="M-20 4 H20 M-20 11 H20"/>
-                 <path class="water-pipe" d="M-27 -12 H-36 V12 H-27 M27 -12 H36 V-2"/>
-                 <text class="structure-label" x="0" y="36">WATER PLANT</text>`
-              : buildingId === 'soil-farm'
+               <text class="structure-label" x="0" y="36">OXYGEN MAKER</text>`
+            : buildingId === 'soil-farm'
                 ? `${shell}<rect class="soil-plots" x="-36" y="-23" width="72" height="46" rx="1"/>
                    <path class="soil-row" d="M-28 -14 H28 M-28 0 H28 M-28 14 H28 M-18 -19 V19 M0 -19 V19 M18 -19 V19"/>
                    <text class="structure-label" x="0" y="36">SOIL FARM</text>`
                 : buildingId === 'hydroponic-farm' || buildingId === 'hydroponics'
         ? `${shell}<rect class="greenhouse-shell" x="-38" y="-23" width="76" height="46" rx="1"/>
            <path class="greenhouse-rib" d="M-24 -18 V18 M-8 -18 V18 M8 -18 V18 M24 -18 V18 M-33 0 H33"/>
-           <text class="structure-label" x="0" y="36">${buildingId === 'hydroponics' ? 'HYDROPONICS BAY' : 'HYDROPONIC FARM'}</text>`
+           <text class="structure-label" x="0" y="36">${buildingId === 'hydroponics' ? 'INDOOR FARM' : 'WATER FARM'}</text>`
                   : buildingId === 'bug-protein-processor'
                   ? `${shell}<rect class="bug-vat" x="-31" y="-20" width="19" height="40" rx="2"/>
                      <rect class="bug-vat vat-secondary" x="-9" y="-20" width="19" height="40" rx="2"/>
                      <rect class="bug-vat" x="13" y="-20" width="18" height="40" rx="2"/>
                      <path class="bug-pipe" d="M-22 -20 V-27 H22 V-20 M-12 0 H-9 M10 0 H13"/>
-                     <text class="structure-label" x="0" y="36">PROTEIN PROCESSOR</text>`
+                     <text class="structure-label" x="0" y="36">BUG FOOD MAKER</text>`
                   : buildingId === 'ice-extractor'
                     ? `${shell}<circle class="rig-housing" cx="0" cy="0" r="19"/>
                        <circle class="rig-frame" cx="0" cy="0" r="8"/>
                        <path class="rig-frame" d="M-30 0 H30 M0 -25 V25"/>
                        <path class="warm-window" d="M-38 -23 H-27 M27 23 H38"/>
-                       <text class="structure-label" x="0" y="36">ICE EXTRACTOR</text>`
+                       <text class="structure-label" x="0" y="36">ICE DRILL</text>`
                     : buildingId === 'oxygen-recycler'
                       ? `${shell}<rect class="recycler-tank" x="-30" y="-19" width="23" height="38" rx="2"/>
                          <rect class="recycler-tank tank-secondary" x="7" y="-19" width="23" height="38" rx="2"/>
                          <path class="recycler-pipe" d="M-7 0 H7 M-18 -10 H18"/>
-                         <text class="structure-label" x="0" y="36">OXYGEN RECYCLER</text>`
+                         <text class="structure-label" x="0" y="36">AIR RECYCLER</text>`
                       : buildingId === 'regolith-collector'
                         ? `${shell}<rect class="mine-hill" x="-28" y="-17" width="56" height="34" rx="1"/>
                            <path class="collector-arm" d="M-8 -17 V-29 H18 V-8 M18 -8 L29 1"/>
                            <path class="collector-scoop" d="M24 0 H34 V9 H27"/>
+                           <text class="structure-label" x="0" y="36">MOON DUST COLLECTOR</text>`
+                        : `${shell}<rect class="mine-hill" x="-31" y="-20" width="62" height="40" rx="1"/>
+                           <path class="deep-shaft" d="M0 -18 V18 M-18 0 H18"/>
+                           <rect class="mine-ore" x="-5" y="-5" width="10" height="10"/>
+                           <path class="mine-track" d="M-38 23 H38 M-28 18 V27 M28 18 V27"/>
+                           <text class="structure-label" x="0" y="36">DEEP MINE</text>`;
+  const accessibleName = `${definition.name} facility ${instanceNumber}`;
+  return `<g class="colony-structure facility-structure ${buildingId}" transform="translate(${x} ${y})" role="img" aria-label="${esc(accessibleName)}">
+    <title>${esc(accessibleName)}</title>${structure}
                            <text class="structure-label" x="0" y="36">REGOLITH COLLECTOR</text>`
                         : buildingId === 'deep-rock-mining'
                           ? `${shell}<rect class="mine-hill" x="-31" y="-20" width="62" height="40" rx="1"/>
@@ -511,6 +589,13 @@ function facilityStructureMarkup(
     ${structure}
     ${buildingWarningMarkup(hazard, 43, -42)}
   </g>`;
+}
+
+function facilityNameplateMarkup(buildingId: BuildingId, placement: BuildingPlacement): string {
+  const definition = BUILDINGS.find((building) => building.id === buildingId);
+  if (!definition) throw new Error(`Unknown facility on sector map: ${buildingId}.`);
+  const verticalClass = placement.y > 0.9 ? 'facility-nameplate-above' : '';
+  return `<span class="facility-nameplate ${verticalClass}" style="left:${placement.x * 100}%;top:${placement.y * 100}%" title="${esc(definition.name)}">${esc(definition.shortName)}</span>`;
 }
 
 function sectorSurfaceMarkup(sector: Sector): string {
@@ -589,6 +674,10 @@ function sectorSurfaceMarkup(sector: Sector): string {
           <ellipse cx="0" cy="0" rx="47" ry="29"/><circle cx="0" cy="0" r="8"/><path d="M-31 -19 L31 19 M31 -19 L-31 19"/>
           <text x="0" y="48">EXPEDITION SITE</text>
         </g>`}
+        ${hasHabitat ? habitatMarkup(colony?.people ?? 0) : ''}
+        ${(colony?.buildingPlacements[sector.id] ?? []).map((placement, index) =>
+          facilityStructureMarkup(placement.buildingId, placement, index + 1),
+        ).join('')}
         ${hasHabitat ? habitatMarkup(colony?.people ?? 0, hazardForBuilding('habitat')) : ''}
         ${buildings.filter((id) => id !== 'habitat').map((id) => {
           const placement = colony!.buildingPlacements[sector.id]?.[id];
@@ -598,6 +687,11 @@ function sectorSurfaceMarkup(sector: Sector): string {
         <g class="map-resource-site" transform="translate(420 465)"><circle r="16"/><path d="M-6 3 L-1 -5 L4 1 L9 -7"/><text y="34">MINERAL RIDGE</text></g>
         ${sector.iceDeposits ? '<g class="map-resource-site ice-resource-site" transform="translate(847 288)"><circle r="16"/><path d="M0 -9 V9 M-8 -4 L8 4 M8 -4 L-8 4"/><text y="34">SHADOWED ICE</text></g>' : ''}
         </svg>
+        <div class="facility-nameplate-layer">
+          ${(colony?.buildingPlacements[sector.id] ?? []).map((placement) =>
+            facilityNameplateMarkup(placement.buildingId, placement),
+          ).join('')}
+        </div>
         ${hasDustStorm ? '<div class="dust-storm-effect" role="img" aria-label="Dust storm sweeping across the lunar surface"></div>' : ''}
         ${pendingBuilding && placementCursor ? `<div class="placement-preview ${cursorIsValid ? '' : 'is-invalid'}" style="left:${placementCursor.x * 100}%;top:${placementCursor.y * 100}%" aria-hidden="true"><span></span></div>` : ''}
         <button class="worksite-marker prospect-site ${prospectingAvailable ? 'worksite-ready' : ''}" data-action="fieldwork" data-fieldwork="prospecting" ${prospectingAvailable ? '' : 'disabled'} aria-label="Prospect mineral ridge: spend 4 energy to collect 2 metal and 5 lunar regolith. ${prospectStatus}">
@@ -745,20 +839,17 @@ function renderPixelatedSurfaceMap(): void {
   const colors: Record<BuildingId, string> = {
     habitat: '#f0b968',
     'living-quarters': '#e8b66d',
-    'solar-array': '#8ec6d0',
     'solar-panels': '#79b9d1',
     'nuclear-power': '#ed9564',
     'medical-bay': '#e58f9e',
     hydroponics: '#a8c987',
     'oxygen-plant': '#89c8ec',
-    'water-plant': '#5ab8d7',
     'ice-extractor': '#a5d6dc',
     'oxygen-recycler': '#c5b3d5',
     'soil-farm': '#9caf6e',
     'hydroponic-farm': '#a8d06c',
     'bug-protein-processor': '#cf9f63',
     'regolith-collector': '#d8ad72',
-    'regolith-mine': '#d5a45f',
     'deep-rock-mining': '#b68a6e',
   };
   const drawPixelBuilding = (
@@ -771,146 +862,147 @@ function renderPixelatedSurfaceMap(): void {
     const px = Math.round(x);
     const py = Math.round(y);
     const cell = radius / 6;
-    const rowWidths = [3, 7, 9, 11, 13, 13, 13, 13, 13, 11, 9, 7, 3];
     const pixelRect = (color: string, left: number, top: number, columns: number, rows: number): void => {
       context.fillStyle = color;
       context.fillRect(px + left * cell, py + top * cell, columns * cell, rows * cell);
     };
 
-    for (let row = 0; row < rowWidths.length; row += 1) {
-      const halfWidth = Math.floor(rowWidths[row] / 2);
-      for (let column = -halfWidth; column <= halfWidth; column += 1) {
-        context.fillStyle = '#192429';
-        context.fillRect(
-          px + column * cell + cell,
-          py + (row - 6) * cell + cell,
-          cell,
-          cell,
-        );
-      }
-    }
-
-    for (let row = 0; row < rowWidths.length; row += 1) {
-      const halfWidth = Math.floor(rowWidths[row] / 2);
-      for (let column = -halfWidth; column <= halfWidth; column += 1) {
-        const distance = column * column + (row - 6) * (row - 6);
-        context.fillStyle =
-          distance >= 32 ? '#1c292e'
-            : distance >= 18 ? '#e3dce8'
-              : distance >= 8 ? '#796d89'
-                : '#272a35';
-        context.fillRect(
-          px + column * cell,
-          py + (row - 6) * cell,
-          cell,
-          cell,
-        );
-      }
-    }
-
-    context.fillStyle = '#46535a';
-    context.fillRect(px - cell, py - cell, cell * 2, cell * 2);
-    context.fillStyle = light;
-    context.fillRect(px - cell, py - cell, cell, cell);
-    context.fillStyle = '#f2edf3';
-    context.fillRect(px + cell, py - cell, cell, cell);
-    context.fillStyle = light;
-    context.fillRect(px - 4 * cell, py, cell, cell);
-    context.fillRect(px + 3 * cell, py, cell, cell);
+    pixelRect('#172226', -5, -3, 11, 8);
+    pixelRect('#66736f', -4, -3, 9, 1);
+    pixelRect('#38464a', -4, -2, 9, 5);
+    pixelRect('#202c30', -4, 3, 9, 1);
+    pixelRect(light, -4, -3, 1, 1);
+    pixelRect('#d4c7a6', 4, 3, 1, 1);
 
     switch (buildingId) {
-      case 'solar-array':
       case 'solar-panels':
-        pixelRect('#203c4a', -4, -3, 3, 6);
-        pixelRect('#203c4a', 1, -3, 3, 6);
-        pixelRect('#47758a', -3, -2, 1, 4);
-        pixelRect('#47758a', -1, -2, 1, 4);
-        pixelRect('#47758a', 2, -2, 1, 4);
-        pixelRect('#47758a', 3, -2, 1, 4);
-        pixelRect('#9bcbd7', -4, 0, 3, 1);
-        pixelRect('#9bcbd7', 1, 0, 3, 1);
-        pixelRect('#d5c8a9', 0, -1, 1, 3);
+        pixelRect('#172c36', -5, -4, 4, 8);
+        pixelRect('#172c36', 1, -4, 4, 8);
+        pixelRect('#47758a', -4, -3, 1, 6);
+        pixelRect('#47758a', -2, -3, 1, 6);
+        pixelRect('#47758a', 2, -3, 1, 6);
+        pixelRect('#47758a', 4, -3, 1, 6);
+        pixelRect('#a8d9df', -5, -1, 4, 1);
+        pixelRect('#a8d9df', 1, -1, 4, 1);
+        pixelRect('#d5c8a9', 0, -2, 1, 5);
+        pixelRect('#f0d47a', -1, 3, 3, 1);
         break;
       case 'nuclear-power':
-        pixelRect('#4d5c5e', -2, -2, 4, 4);
-        pixelRect('#26353a', -1, -1, 2, 2);
-        pixelRect(light, -1, -1, 1, 1);
-        pixelRect('#f6d4a0', 0, 0, 1, 1);
-        pixelRect('#a9b5b1', -3, -3, 1, 1);
-        pixelRect('#a9b5b1', 2, -3, 1, 1);
-        pixelRect('#a9b5b1', -3, 2, 1, 1);
-        pixelRect('#a9b5b1', 2, 2, 1, 1);
+        pixelRect('#78817b', -4, -4, 2, 7);
+        pixelRect('#53635f', -3, -3, 1, 5);
+        pixelRect('#78817b', 3, -4, 2, 7);
+        pixelRect('#53635f', 3, -3, 1, 5);
+        pixelRect('#26353a', -1, -2, 3, 5);
+        pixelRect('#eb8a4c', 0, -1, 1, 3);
+        pixelRect('#f5d276', -1, 3, 3, 1);
+        pixelRect('#d2d2b6', -4, -4, 2, 1);
+        pixelRect('#d2d2b6', 3, -4, 2, 1);
         break;
       case 'medical-bay':
-        pixelRect('#49585b', -3, -2, 6, 4);
-        pixelRect(light, -1, -2, 2, 4);
-        pixelRect(light, -3, -1, 6, 2);
-        pixelRect('#f4e3df', -1, -1, 1, 1);
-        pixelRect('#f4e3df', 0, 0, 1, 1);
-        pixelRect('#343b42', -1, 3, 2, 1);
+        pixelRect('#754a50', -4, -3, 8, 6);
+        pixelRect('#e990a2', -1, -3, 2, 6);
+        pixelRect('#e990a2', -4, -1, 8, 2);
+        pixelRect('#fff0df', -1, -2, 2, 4);
+        pixelRect('#fff0df', -3, -1, 6, 2);
+        pixelRect('#28353a', -1, 3, 2, 1);
         break;
       case 'oxygen-plant':
-      case 'oxygen-recycler':
-        pixelRect('#41575c', -3, -2, 2, 4);
-        pixelRect('#607d82', 1, -2, 2, 4);
-        pixelRect(light, -3, -2, 2, 1);
-        pixelRect('#d7edf0', 1, -2, 2, 1);
-        pixelRect('#a6c1bf', -1, -1, 2, 1);
-        pixelRect('#a6c1bf', -1, 1, 2, 1);
+        pixelRect('#30464b', -4, -2, 3, 6);
+        pixelRect('#4d6970', 2, -2, 3, 6);
+        pixelRect('#b6d9d9', -4, -3, 3, 1);
+        pixelRect('#e2efde', 2, -3, 3, 1);
+        pixelRect('#88b7b9', -3, 0, 1, 2);
+        pixelRect('#aac9c5', 3, -1, 1, 3);
+        pixelRect('#9bcbd7', 0, -2, 1, 1);
+        pixelRect('#9bcbd7', 1, -3, 1, 1);
+        pixelRect('#b6d9d9', 1, -1, 1, 1);
         break;
-      case 'water-plant':
+      case 'oxygen-recycler':
+        pixelRect('#35484d', -4, -2, 3, 5);
+        pixelRect('#536d70', 2, -2, 3, 5);
+        pixelRect('#b6d9d9', -4, -3, 3, 1);
+        pixelRect('#d7edf0', 2, -3, 3, 1);
+        pixelRect('#9bcbd7', -3, -1, 1, 3);
+        pixelRect('#9bcbd7', 3, -1, 1, 3);
+        pixelRect('#d7edf0', -1, -1, 3, 1);
+        pixelRect('#d7edf0', -1, 1, 3, 1);
+        break;
       case 'ice-extractor':
-        pixelRect('#315c6b', -3, -2, 6, 4);
-        pixelRect('#83d3df', -2, 0, 4, 1);
-        pixelRect('#5aaec0', -2, 1, 4, 1);
-        pixelRect('#d3e6dc', -1, -2, 2, 1);
-        pixelRect('#263940', 2, -1, 1, 2);
+        pixelRect('#315b65', -3, -3, 6, 5);
+        pixelRect('#9bd5df', -2, -2, 4, 1);
+        pixelRect('#73bac8', -1, -1, 2, 3);
+        pixelRect('#d8eff0', -1, -4, 2, 1);
+        pixelRect('#d8eff0', -1, 2, 2, 3);
+        pixelRect('#1c2a30', -4, 4, 8, 1);
+        pixelRect('#d3e6dc', -4, -2, 1, 2);
+        pixelRect('#d3e6dc', 3, -2, 1, 2);
         break;
       case 'soil-farm':
-        pixelRect('#554936', -3, -2, 6, 4);
-        pixelRect('#91b466', -2, -2, 1, 4);
-        pixelRect('#bad078', 0, -2, 1, 4);
-        pixelRect('#91b466', 2, -2, 1, 4);
-        pixelRect('#745f3e', -3, 0, 6, 1);
+        pixelRect('#604c32', -4, -3, 8, 6);
+        pixelRect('#a47c4b', -4, -2, 8, 1);
+        pixelRect('#35432f', -3, -1, 6, 4);
+        pixelRect('#9caf6e', -3, 0, 1, 3);
+        pixelRect('#bad078', -1, -1, 1, 4);
+        pixelRect('#91b466', 1, -1, 1, 4);
+        pixelRect('#c3d883', 3, -1, 1, 4);
+        pixelRect('#715c3c', -4, 3, 8, 1);
         break;
       case 'hydroponics':
       case 'hydroponic-farm':
-        pixelRect('#334d47', -3, -2, 6, 4);
-        pixelRect('#8ebd67', -2, -2, 1, 4);
-        pixelRect('#b5d77b', 0, -2, 1, 4);
-        pixelRect('#8ebd67', 2, -2, 1, 4);
-        pixelRect('#9bcbd7', -3, 2, 6, 1);
+        pixelRect('#263d3b', -4, -3, 8, 7);
+        pixelRect('#a6d3cb', -3, -3, 6, 1);
+        pixelRect('#58786c', -3, -2, 6, 1);
+        pixelRect('#334d47', -3, -1, 6, 4);
+        pixelRect('#8ebd67', -2, -1, 1, 4);
+        pixelRect('#b5d77b', 0, -2, 1, 5);
+        pixelRect('#8ebd67', 2, -1, 1, 4);
+        pixelRect('#9bcbd7', -3, 3, 6, 1);
+        pixelRect('#d1dfbd', -4, -4, 8, 1);
         break;
       case 'bug-protein-processor':
-        pixelRect('#514039', -3, -2, 2, 4);
-        pixelRect('#6d5842', -1, -2, 2, 4);
-        pixelRect('#514039', 1, -2, 2, 4);
-        pixelRect(light, -3, -2, 2, 1);
-        pixelRect('#e5c27b', -1, -2, 2, 1);
-        pixelRect(light, 1, -2, 2, 1);
-        pixelRect('#aeb6a5', -1, 2, 2, 1);
+        pixelRect('#4f392e', -4, -2, 2, 6);
+        pixelRect('#75573c', -1, -3, 3, 7);
+        pixelRect('#4f392e', 3, -2, 2, 6);
+        pixelRect('#d0a76b', -4, -3, 2, 1);
+        pixelRect('#e5c27b', -1, -4, 3, 1);
+        pixelRect('#d0a76b', 3, -3, 2, 1);
+        pixelRect('#bba06a', -2, -1, 1, 2);
+        pixelRect('#bba06a', 1, -1, 1, 2);
+        pixelRect('#d8c194', -2, -4, 1, 1);
+        pixelRect('#d8c194', 2, -4, 1, 1);
         break;
       case 'regolith-collector':
-        pixelRect('#4c4a3e', -3, -2, 5, 4);
-        pixelRect('#c29b62', -1, -3, 1, 3);
-        pixelRect('#c29b62', -1, -3, 4, 1);
-        pixelRect('#ead09a', 2, -2, 1, 1);
-        pixelRect('#c29b62', 2, -1, 2, 1);
+        pixelRect('#4c4a3e', -4, 0, 6, 3);
+        pixelRect('#d5ad70', -3, -1, 3, 1);
+        pixelRect('#c29b62', -1, -4, 1, 4);
+        pixelRect('#c29b62', -1, -4, 4, 1);
+        pixelRect('#ead09a', 2, -3, 1, 1);
+        pixelRect('#c29b62', 2, -2, 2, 1);
+        pixelRect('#e4c283', 4, -1, 2, 1);
+        pixelRect('#242c2c', -3, 3, 2, 1);
+        pixelRect('#242c2c', 1, 3, 2, 1);
         break;
       case 'deep-rock-mining':
-      case 'regolith-mine':
-        pixelRect('#4e4b42', -3, -2, 6, 4);
-        pixelRect('#c9944f', -1, -3, 2, 1);
-        pixelRect('#dcae65', -1, -2, 2, 1);
-        pixelRect('#29363a', 0, -1, 1, 3);
-        pixelRect(light, -2, 2, 1, 1);
-        pixelRect('#edc274', 1, 2, 1, 1);
+        pixelRect('#58483c', -4, -3, 8, 6);
+        pixelRect('#252c30', -3, -2, 6, 5);
+        pixelRect('#b68a6e', -4, -4, 8, 1);
+        pixelRect('#d7b29a', -3, -3, 1, 1);
+        pixelRect('#d7b29a', 2, -3, 1, 1);
+        pixelRect('#a9a69a', -2, -2, 1, 3);
+        pixelRect('#a9a69a', 1, -2, 1, 3);
+        pixelRect('#e6c578', 0, -1, 1, 2);
+        pixelRect('#d2a15b', -4, 3, 8, 1);
+        pixelRect('#f0c77f', -2, 2, 1, 1);
+        pixelRect('#f0c77f', 2, 2, 1, 1);
         break;
       case 'living-quarters':
       case 'habitat':
-        pixelRect('#46535a', -1, -1, 2, 2);
-        pixelRect(light, -1, -1, 1, 1);
-        pixelRect('#f2edf3', 1, -1, 1, 1);
+        pixelRect('#47565c', -4, -2, 8, 5);
+        pixelRect('#697875', -4, -3, 8, 1);
+        pixelRect('#f0b968', -3, -1, 2, 2);
+        pixelRect('#f0b968', 1, -1, 2, 2);
+        pixelRect('#27343a', -1, 1, 2, 2);
+        pixelRect('#9eaa99', -4, 3, 8, 1);
         break;
     }
   };
@@ -928,6 +1020,23 @@ function renderPixelatedSurfaceMap(): void {
     context.fill();
     context.fillStyle = light;
     context.fillRect(px - 1, py - 1, 2, 2);
+  };
+
+  const drawBuildingLogo = (x: number, y: number, radius: number, buildingId: BuildingId): void => {
+    const px = Math.round(x);
+    const py = Math.round(y);
+    const fontSize = Math.max(8, Math.min(12, radius * 0.9));
+    const logo = BUILDING_ICONS[buildingId];
+    context.save();
+    context.font = `bold ${fontSize}px sans-serif`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.lineWidth = 1.25;
+    context.strokeStyle = '#172226';
+    context.strokeText(logo, px, py);
+    context.fillStyle = colors[buildingId];
+    context.fillText(logo, px, py);
+    context.restore();
   };
 
   const drawPixelWarningSign = (x: number, y: number): void => {
@@ -978,14 +1087,26 @@ function renderPixelatedSurfaceMap(): void {
       ? { x: Number(match[1]) * width / 1000, y: Number(match[2]) * height / 640 }
       : null;
   };
+  const toPlacementCanvasPoint = (element: Element): { x: number; y: number } | null => {
+    const point = toCanvasPoint(element);
+    if (!point) return null;
+    // Invert the canvas camera so saved view coordinates land under the user's click.
+    return {
+      x: cameraX + (point.x - width / 2) / zoom,
+      y: cameraY + (point.y - height / 2) / zoom,
+    };
+  };
 
   const warningSites: { x: number; y: number }[] = [];
   const meteoriteSites: { x: number; y: number }[] = [];
   const habitat = svg.querySelector<SVGGElement>('.habitat-structure');
   if (habitat) {
     drawPixelBuilding(125, 85, 13, colors.habitat, 'habitat');
+    drawBuildingLogo(125, 85, 13, 'habitat');
     drawPixelBuilding(103, 85, 7, colors['living-quarters'], 'living-quarters');
+    drawBuildingLogo(103, 85, 7, 'living-quarters');
     drawPixelBuilding(147, 85, 7, colors['living-quarters'], 'living-quarters');
+    drawBuildingLogo(147, 85, 7, 'living-quarters');
     if (habitat.querySelector('.building-warning-sign')) {
       warningSites.push({ x: 156.5, y: 73 });
     }
@@ -994,8 +1115,13 @@ function renderPixelatedSurfaceMap(): void {
     }
   }
   svg.querySelectorAll<SVGGElement>('.facility-structure').forEach((building) => {
-    const point = toCanvasPoint(building);
+    const point = toPlacementCanvasPoint(building);
     if (!point) return;
+    const buildingType = (Object.keys(colors) as BuildingId[]).find((type) => building.classList.contains(type));
+    if (!buildingType) return;
+    const radius = 9;
+    drawPixelBuilding(point.x, point.y, radius, colors[buildingType], buildingType);
+    drawBuildingLogo(point.x, point.y, radius, buildingType);
     const buildingType = (Object.keys(colors) as BuildingId[]).find((type) => building.classList.contains(type))
       ?? 'regolith-mine';
     drawPixelBuilding(point.x, point.y, 9, colors[buildingType], buildingType);
@@ -1017,6 +1143,196 @@ function renderPixelatedSurfaceMap(): void {
   svg.classList.add('pixelated-map-source');
   svg.dataset.pixelated = 'true';
   setMapZoom(mapZoom);
+}
+
+function renderWanderingCrew(): void {
+  const mapWorld = document.querySelector<HTMLElement>('.surface-map-world');
+  const svg = mapWorld?.querySelector<SVGSVGElement>('.surface-illustration');
+  if (!mapWorld || !svg || !colony) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'crew-wander-layer';
+  canvas.width = 500;
+  canvas.height = 320;
+  canvas.setAttribute('aria-hidden', 'true');
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Could not create the crew animation layer.');
+  context.imageSmoothingEnabled = false;
+  mapWorld.append(canvas);
+
+  const toMapPoint = (element: Element): { x: number; y: number } | null => {
+    const match = element.getAttribute('transform')?.match(/translate\(([\d.]+)\s+([\d.]+)\)/);
+    return match
+      ? { x: Number(match[1]) / 4, y: Number(match[2]) / 4 }
+      : null;
+  };
+  const buildings = [...svg.querySelectorAll<SVGGElement>('.colony-structure')]
+    .map((building, index) => {
+      const point = toMapPoint(building);
+      if (!point) return null;
+      return {
+        id: `building-${index}`,
+        ...point,
+        radius: building.classList.contains('habitat-structure') ? 15 : 10,
+      };
+    })
+    .filter((stop): stop is CrewStop => stop !== null);
+  const stops: CrewStop[] = [
+    ...buildings,
+    { id: 'mineral-ridge', x: 105, y: 116, radius: 8 },
+    ...(getSector(colony.currentSector).iceDeposits
+      ? [{ id: 'shadowed-ice', x: 211.75, y: 72, radius: 8 }]
+      : []),
+  ];
+  if (!stops.length) return;
+
+  const stageAt = (stop: CrewStop, angle: number): { x: number; y: number } => ({
+    x: stop.x + Math.cos(angle) * stop.radius,
+    y: stop.y + Math.sin(angle) * stop.radius,
+  });
+  const pickStop = (currentStop: string): CrewStop => {
+    const otherStops = stops.filter((stop) => stop.id !== currentStop);
+    const otherBuildings = buildings.filter((stop) => stop.id !== currentStop);
+    const destinationPool =
+      buildings.length > 1 && otherBuildings.length && Math.random() < 0.8
+        ? otherBuildings
+        : otherStops;
+    return destinationPool[Math.floor(Math.random() * destinationPool.length)] ?? stops[0];
+  };
+  const walkers: CrewWalker[] = Array.from({ length: colony.people }, (_, index) => {
+    const stop = buildings[index % buildings.length] ?? stops[index % stops.length];
+    const point = stageAt(stop, (index / Math.max(1, colony!.people)) * Math.PI * 2);
+    const appearance = CREW_PALETTE[index % CREW_PALETTE.length];
+    return {
+      ...point,
+      startX: point.x,
+      startY: point.y,
+      targetX: point.x,
+      targetY: point.y,
+      controlX: point.x,
+      controlY: point.y,
+      progress: 1,
+      duration: 1,
+      idleUntil: performance.now() + index * 260,
+      currentStop: stop.id,
+      targetStop: stop.id,
+      ...appearance,
+      phase: index % 2,
+    };
+  });
+
+  const beginWalk = (walker: CrewWalker, now: number): void => {
+    const destination = pickStop(walker.currentStop);
+    const point = stageAt(destination, Math.random() * Math.PI * 2);
+    walker.startX = walker.x;
+    walker.startY = walker.y;
+    walker.targetX = point.x;
+    walker.targetY = point.y;
+    walker.targetStop = destination.id;
+    const distance = Math.hypot(point.x - walker.x, point.y - walker.y);
+    const bend = (Math.random() - 0.5) * 18;
+    const perpendicularX = distance ? -(point.y - walker.y) / distance : 0;
+    const perpendicularY = distance ? (point.x - walker.x) / distance : 0;
+    walker.controlX = (walker.x + point.x) / 2 + perpendicularX * bend;
+    walker.controlY = (walker.y + point.y) / 2 + perpendicularY * bend;
+    walker.duration = Math.max(1.2, distance / (12 + Math.random() * 5));
+    walker.progress = 0;
+    walker.idleUntil = now;
+  };
+
+  const drawWalker = (walker: CrewWalker, now: number): void => {
+    const x = Math.round(walker.x);
+    const y = Math.round(walker.y);
+    const walking = walker.progress < 1;
+    const step = walking ? Math.floor(now / 170 + walker.phase) % 2 : 0;
+    const block = (color: string, left: number, top: number, width: number, height: number): void => {
+      context.fillStyle = color;
+      context.fillRect(
+        x + Math.round(left * 0.65),
+        y + Math.round(top * 0.65),
+        Math.max(1, Math.round(width * 0.65)),
+        Math.max(1, Math.round(height * 0.65)),
+      );
+    };
+
+    block('rgba(28, 41, 46, .7)', -3, 3, 7, 2);
+    block('#24343a', -2 + step, 1, 2, 3);
+    block('#24343a', 1 - step, 1, 2, 3);
+    block(walker.suit, -2, -3, 5, 4);
+    block('#9da9a5', -3, -2, 1, 2);
+    block(walker.trim, 2, -2, 1, 2);
+    block('#28383d', -2, -5, 5, 2);
+    block('#dce0d4', -1, -6, 3, 2);
+    block(walker.visor, 0, -5, 2, 1);
+    block(walker.trim, -3, -3, 1, 2);
+    block('#36474c', 3, -3, 1, 3);
+    block(walker.trim, -1, 2 + step, 2, 1);
+    block(walker.trim, 1, 2 + (1 - step), 2, 1);
+  };
+
+  const pixelScale = 2;
+  const mapWidth = 250;
+  const mapHeight = 160;
+  const cameraX = 125;
+  const cameraY = 85;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let previousFrameTime = performance.now();
+  const drawFrame = (now: number): void => {
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.setTransform(
+      pixelScale * BASE_MAP_ZOOM,
+      0,
+      0,
+      pixelScale * BASE_MAP_ZOOM,
+      pixelScale * (mapWidth / 2 - cameraX * BASE_MAP_ZOOM),
+      pixelScale * (mapHeight / 2 - cameraY * BASE_MAP_ZOOM),
+    );
+    for (const walker of walkers) drawWalker(walker, now);
+  };
+  const animate = (now: number): void => {
+    if (!canvas.isConnected) return;
+    if (document.visibilityState === 'hidden') {
+      crewAnimationFrame = window.requestAnimationFrame(animate);
+      return;
+    }
+
+    const canMove = !reducedMotion && colony && !colony.paused && !colony.failed;
+    if (canMove) {
+      const deltaSeconds = Math.min(50, Math.max(0, now - previousFrameTime)) / 1000;
+      for (const walker of walkers) {
+        if (walker.progress >= 1 && now >= walker.idleUntil) {
+          walker.currentStop = walker.targetStop;
+          beginWalk(walker, now);
+        }
+        if (walker.progress < 1) {
+          walker.progress = Math.min(1, walker.progress + deltaSeconds / walker.duration);
+          const inverse = 1 - walker.progress;
+          walker.x =
+            inverse * inverse * walker.startX +
+            2 * inverse * walker.progress * walker.controlX +
+            walker.progress * walker.progress * walker.targetX;
+          walker.y =
+            inverse * inverse * walker.startY +
+            2 * inverse * walker.progress * walker.controlY +
+            walker.progress * walker.progress * walker.targetY;
+          if (walker.progress === 1) {
+            walker.x = walker.targetX;
+            walker.y = walker.targetY;
+            walker.idleUntil = now + 650 + Math.random() * 1300;
+          }
+        }
+      }
+    }
+    previousFrameTime = now;
+
+    drawFrame(now);
+    if (canMove) crewAnimationFrame = window.requestAnimationFrame(animate);
+    else crewAnimationFrame = null;
+  };
+
+  drawFrame(performance.now());
+  crewAnimationFrame = window.requestAnimationFrame(animate);
 }
 
 function sectorScreenMarkup(): string {
@@ -1047,11 +1363,11 @@ function sectorScreenMarkup(): string {
         </div>
       </section>
       <aside class="management-panel panel">
-        <div class="management-heading"><div><span class="eyebrow">COLONY DEVELOPMENT</span><h1>Build facilities</h1></div><span class="system-count">${(colony.buildings[sector.id] ?? []).filter((id) => id !== 'habitat').length} / ${BUILDINGS.length - 1}</span></div>
-        <p class="management-copy">Choose a facility, then select an open spot on the map. Costs are paid once; production and power use apply every lunar day across the colony.</p>
-        <div class="habitat-status ${hasHabitat ? '' : 'habitat-unavailable'}"><span class="habitat-icon">⌂</span><span><strong>${hasHabitat ? 'Habitat & living quarters online' : 'Expedition site · no habitat'}</strong><small>${hasHabitat ? 'Shelter and crew quarters shown on the surface map' : 'Build living quarters to add shelter at this outpost'}</small></span><span class="status-pill ${hasHabitat ? 'status-open' : 'status-locked'}">${hasHabitat ? 'ONLINE' : 'SITE'}</span></div>
+        <div class="management-heading"><div><span class="eyebrow">COLONY DEVELOPMENT</span><h1>Build facilities</h1></div><span class="system-count">${(colony.buildings[sector.id] ?? []).filter((id) => id !== 'habitat').length} BUILT</span></div>
+        <p class="management-copy">One first placement of Crew homes, Solar panels, Soil farm, and Ice drill is free per colony. Repeats cost materials.</p>
+        <div class="habitat-status ${hasHabitat ? '' : 'habitat-unavailable'}"><span class="habitat-icon">⌂</span><span><strong>${hasHabitat ? 'Starter shelter online' : 'Expedition site · no shelter'}</strong><small>${hasHabitat ? 'Starter shelter and crew homes shown on the surface map' : 'Build crew homes to add shelter at this outpost'}</small></span><span class="status-pill ${hasHabitat ? 'status-open' : 'status-locked'}">${hasHabitat ? 'ONLINE' : 'SITE'}</span></div>
         <div class="building-list">${BUILDINGS.filter((building) => building.id !== 'habitat').map((building) => buildingCardMarkup(building.id)).join('')}</div>
-        <div class="field-note"><span>ⓘ</span><p>Only one of each facility can be built per sector. Review daily energy use before construction.</p></div>
+        <div class="field-note"><span>ⓘ</span><p>Four starter facilities include one free placement each. Leave space between structures and review daily energy use before construction.</p></div>
       </aside>
     </div>
     <div class="colony-status-strip">
@@ -1076,14 +1392,30 @@ function hasSavedData(): boolean {
 }
 
 function renderInspector(): void {
-  const target = document.querySelector<HTMLElement>('.sector-inspector');
+  const target = document.querySelector<HTMLElement>('.inspector-content');
   if (!target) return;
   const sector = getSector(inspectedSectorId);
   const current = colony ? getSector(colony.currentSector) : null;
   target.innerHTML = `${sectorInspectorMarkup(sector)}${current ? `<div class="current-sector-label"><span class="live-dot"></span> CURRENT OUTPOST <strong>${esc(current.name)}</strong></div>` : ''}`;
 }
 
-function inspectSector(sectorId: number): void {
+function toggleSectorInspector(): void {
+  const isCollapsed = !sectorInspectorCollapsed;
+  sectorInspectorCollapsed = isCollapsed;
+
+  const panel = document.querySelector<HTMLElement>('.sector-inspector');
+  const layout = document.querySelector<HTMLElement>('.atlas-layout');
+  const button = panel?.querySelector<HTMLButtonElement>('[data-action="toggle-sector-inspector"]');
+
+  layout?.classList.toggle('is-inspector-collapsed', isCollapsed);
+  panel?.classList.toggle('is-collapsed', isCollapsed);
+  button?.setAttribute('aria-expanded', String(!isCollapsed));
+  button?.setAttribute('aria-label', `${isCollapsed ? 'Show' : 'Hide'} sector details`);
+  const icon = button?.querySelector('span');
+  if (icon) icon.textContent = isCollapsed ? '‹' : '›';
+}
+
+function inspectSector(sectorId: number, focusGlobe = true): void {
   inspectedSectorId = sectorId;
   document.querySelectorAll<HTMLElement>('.sector-row').forEach((row) => {
     const selected = Number(row.dataset.sector) === sectorId;
@@ -1092,6 +1424,7 @@ function inspectSector(sectorId: number): void {
   });
   renderInspector();
   moonScene?.update(colony, inspectedSectorId);
+  if (focusGlobe) moonScene?.focusSector(sectorId);
 }
 
 function persist(): void {
@@ -1125,9 +1458,11 @@ function beginColony(sectorId: number): void {
   colony = createColony(sectorId);
   screen = 'sector';
   inspectedSectorId = sectorId;
+  starterTutorialVisible = true;
   saveMessage = null;
   persist();
   render();
+  document.querySelector<HTMLButtonElement>('[data-action="dismiss-starter-tutorial"]')?.focus();
 }
 
 function tryUnlock(sectorId: number): void {
@@ -1211,6 +1546,9 @@ function handleAction(button: HTMLElement): void {
   const sectorId = Number(button.dataset.sector);
 
   switch (action) {
+    case 'toggle-sector-inspector':
+      toggleSectorInspector();
+      break;
     case 'inspect-sector':
       inspectSector(sectorId);
       break;
@@ -1221,10 +1559,14 @@ function handleAction(button: HTMLElement): void {
       if (colony?.unlockedSectors.includes(sectorId)) {
         pendingBuildingId = null;
         placementCursor = null;
+        starterTutorialVisible = !colony.starterTutorialSeen;
         colony = { ...colony, currentSector: sectorId };
         inspectedSectorId = sectorId;
         screen = 'sector';
         updateColony(colony);
+        if (starterTutorialVisible) {
+          document.querySelector<HTMLButtonElement>('[data-action="dismiss-starter-tutorial"]')?.focus();
+        }
       }
       break;
     case 'unlock-sector':
@@ -1254,6 +1596,7 @@ function handleAction(button: HTMLElement): void {
     case 'home':
       pendingBuildingId = null;
       placementCursor = null;
+      starterTutorialVisible = false;
       screen = 'atlas';
       if (colony) inspectedSectorId = colony.currentSector;
       render();
@@ -1261,6 +1604,7 @@ function handleAction(button: HTMLElement): void {
     case 'new-colony':
       pendingBuildingId = null;
       placementCursor = null;
+      starterTutorialVisible = false;
       screen = 'atlas';
       colony = null;
       inspectedSectorId = 0;
@@ -1271,10 +1615,14 @@ function handleAction(button: HTMLElement): void {
       const buildingId = button.dataset.building;
       const building = BUILDINGS.find((item) => item.id === buildingId);
       if (!building) break;
-      pendingBuildingId = building.id;
-      placementCursor = getDefaultBuildingPlacement(colony);
-      render();
-      document.querySelector<HTMLElement>('.surface-grid')?.focus();
+      try {
+        placementCursor = getDefaultBuildingPlacement(colony);
+        pendingBuildingId = building.id;
+        render();
+        document.querySelector<HTMLElement>('.surface-grid')?.focus();
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'There is no clear map space left.');
+      }
       break;
     }
     case 'cancel-placement': {
@@ -1324,10 +1672,20 @@ function handleAction(button: HTMLElement): void {
       saveMessage = null;
       render();
       break;
+    case 'dismiss-starter-tutorial':
+      if (!colony) break;
+      starterTutorialVisible = false;
+      updateColony({ ...colony, starterTutorialSeen: true });
+      document.querySelector<HTMLButtonElement>('[data-action="build"][data-building="living-quarters"]')?.focus();
+      break;
   }
 }
 
 function render(): void {
+  if (crewAnimationFrame !== null) {
+    window.cancelAnimationFrame(crewAnimationFrame);
+    crewAnimationFrame = null;
+  }
   moonScene?.dispose();
   moonScene = null;
   document.querySelector<HTMLDivElement>('#app')!.innerHTML =
@@ -1341,8 +1699,7 @@ function render(): void {
           colony,
           inspectedSectorId,
           (sectorId) => {
-            inspectedSectorId = sectorId;
-            render();
+            inspectSector(sectorId, false);
           },
           (sectorId) => {
             if (sectorId !== null) {
@@ -1357,6 +1714,7 @@ function render(): void {
     }
   } else {
     renderPixelatedSurfaceMap();
+    renderWanderingCrew();
   }
 }
 
@@ -1394,6 +1752,18 @@ export function startApplication(root: HTMLDivElement): void {
   });
 
   root.addEventListener('keydown', (event) => {
+    if (starterTutorialVisible) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        document.querySelector<HTMLButtonElement>('[data-action="dismiss-starter-tutorial"]')?.click();
+        return;
+      }
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        document.querySelector<HTMLButtonElement>('[data-action="dismiss-starter-tutorial"]')?.focus();
+        return;
+      }
+    }
     if (
       !pendingBuildingId ||
       !(event.target instanceof HTMLElement) ||
@@ -1436,6 +1806,7 @@ export function startApplication(root: HTMLDivElement): void {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && colony && !colony.paused && !colony.failed) {
       persist();
+      moonScene?.setSimulationTime(colony.elapsedMs, true);
     }
   });
 
@@ -1448,6 +1819,7 @@ export function startApplication(root: HTMLDivElement): void {
       return;
     }
     colony = { ...colony, elapsedMs };
+    moonScene?.setSimulationTime(elapsedMs, true);
     const remaining = DAY_LENGTH_MS - elapsedMs;
     const timeLabel = document.querySelector<HTMLElement>('.time-left');
     const progressLabel = document.querySelector<HTMLElement>('.day-progress');

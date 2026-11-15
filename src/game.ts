@@ -1,5 +1,5 @@
 export const STORAGE_KEY = 'lunar-frontier-save';
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 6;
 export const DAY_LENGTH_MS = 45_000;
 
 const HAZARD_INTERVAL_MIN = 10;
@@ -24,30 +24,51 @@ export interface Sector {
   longitude: number;
   description: string;
   terrain: string;
+  surfaceRelief: SectorRelief;
   unlockMetal: number;
   unlockRegolith: number;
   crewRequired: number;
   iceDeposits?: boolean;
 }
 
+export type SectorRelief =
+  | 'polar-ice-craters'
+  | 'polar-ridges'
+  | 'polar-craters'
+  | 'icy-uplands'
+  | 'volcanic-plain'
+  | 'wrinkle-ridges'
+  | 'volcanic-domes'
+  | 'sinuous-rille'
+  | 'volcanic-province'
+  | 'shadowed-uplands'
+  | 'cratered-highlands'
+  | 'ejecta-blanket'
+  | 'impact-basin'
+  | 'concentric-massif'
+  | 'shadowed-crater';
+
 export type BuildingId =
   | 'habitat'
   | 'living-quarters'
-  | 'solar-array'
   | 'solar-panels'
   | 'nuclear-power'
   | 'medical-bay'
   | 'hydroponics'
   | 'oxygen-plant'
-  | 'water-plant'
   | 'ice-extractor'
   | 'oxygen-recycler'
   | 'soil-farm'
   | 'hydroponic-farm'
   | 'bug-protein-processor'
   | 'regolith-collector'
-  | 'regolith-mine'
   | 'deep-rock-mining';
+
+const DISCONTINUED_BUILDING_IDS = new Set([
+  'regolith-mine',
+  'solar-array',
+  'water-plant',
+]);
 
 export type FieldworkId = 'prospecting' | 'ice-core';
 
@@ -75,6 +96,10 @@ export interface BuildingPlacement {
   y: number;
 }
 
+export interface PlacedBuilding extends BuildingPlacement {
+  buildingId: BuildingId;
+}
+
 export type HazardKind =
   | 'meteorite-impact'
   | 'dust-storm'
@@ -98,7 +123,7 @@ export interface ColonySave {
   people: number;
   resources: Resources;
   buildings: Record<number, BuildingId[]>;
-  buildingPlacements: Record<number, Partial<Record<BuildingId, BuildingPlacement>>>;
+  buildingPlacements: Record<number, PlacedBuilding[]>;
   day: number;
   elapsedMs: number;
   lastFieldworkDay: number;
@@ -110,6 +135,7 @@ export interface ColonySave {
   paused: boolean;
   failed: boolean;
   failureReason: string;
+  starterTutorialSeen: boolean;
 }
 
 export const SECTORS: Sector[] = [
@@ -120,6 +146,7 @@ export const SECTORS: Sector[] = [
     longitude: 0,
     description: 'A polar landing zone where permanently shadowed terrain may hold valuable water ice.',
     terrain: 'Polar highlands',
+    surfaceRelief: 'polar-ice-craters',
     unlockMetal: 24,
     unlockRegolith: 18,
     crewRequired: 3,
@@ -132,6 +159,7 @@ export const SECTORS: Sector[] = [
     longitude: 72,
     description: 'Rugged southern terrain with long shadows and challenging routes between ridges.',
     terrain: 'Rugged polar plain',
+    surfaceRelief: 'polar-ridges',
     unlockMetal: 28,
     unlockRegolith: 22,
     crewRequired: 4,
@@ -144,6 +172,7 @@ export const SECTORS: Sector[] = [
     longitude: 0,
     description: 'A high-latitude frontier with low-angle sunlight and cratered polar ground.',
     terrain: 'Polar highlands',
+    surfaceRelief: 'polar-craters',
     unlockMetal: 25,
     unlockRegolith: 20,
     crewRequired: 3,
@@ -156,6 +185,7 @@ export const SECTORS: Sector[] = [
     longitude: 72,
     description: 'A cold northern region where shadow, sunlight, and access shape every mission plan.',
     terrain: 'Icy uplands',
+    surfaceRelief: 'icy-uplands',
     unlockMetal: 30,
     unlockRegolith: 24,
     crewRequired: 4,
@@ -168,6 +198,7 @@ export const SECTORS: Sector[] = [
     longitude: -144,
     description: 'Broad volcanic plains offer open ground for routes, landing areas, and solar fields.',
     terrain: 'Basalt plain',
+    surfaceRelief: 'volcanic-plain',
     unlockMetal: 26,
     unlockRegolith: 20,
     crewRequired: 3,
@@ -179,6 +210,7 @@ export const SECTORS: Sector[] = [
     longitude: -72,
     description: 'Long ridges cross the plain, creating elevated views and uneven construction ground.',
     terrain: 'Ridge belt',
+    surfaceRelief: 'wrinkle-ridges',
     unlockMetal: 28,
     unlockRegolith: 22,
     crewRequired: 4,
@@ -190,6 +222,7 @@ export const SECTORS: Sector[] = [
     longitude: 0,
     description: 'Ancient volcanic domes reveal a story of lava, heat, and the Moon’s changing interior.',
     terrain: 'Volcanic upland',
+    surfaceRelief: 'volcanic-domes',
     unlockMetal: 30,
     unlockRegolith: 24,
     crewRequired: 4,
@@ -201,6 +234,7 @@ export const SECTORS: Sector[] = [
     longitude: 72,
     description: 'Winding channels mark a landscape shaped by flowing lava and collapsed tubes.',
     terrain: 'Rille country',
+    surfaceRelief: 'sinuous-rille',
     unlockMetal: 32,
     unlockRegolith: 26,
     crewRequired: 5,
@@ -212,6 +246,7 @@ export const SECTORS: Sector[] = [
     longitude: 144,
     description: 'A large volcanic province with varied plains and room for long-range exploration.',
     terrain: 'Volcanic terrane',
+    surfaceRelief: 'volcanic-province',
     unlockMetal: 30,
     unlockRegolith: 24,
     crewRequired: 4,
@@ -223,6 +258,7 @@ export const SECTORS: Sector[] = [
     longitude: 144,
     description: 'A northern transition region between sunlit highlands and crater shadows.',
     terrain: 'Northern uplands',
+    surfaceRelief: 'shadowed-uplands',
     unlockMetal: 34,
     unlockRegolith: 28,
     crewRequired: 5,
@@ -235,6 +271,7 @@ export const SECTORS: Sector[] = [
     longitude: -144,
     description: 'Bright, ancient highlands are heavily cratered and rich in geological history.',
     terrain: 'Highland crust',
+    surfaceRelief: 'cratered-highlands',
     unlockMetal: 32,
     unlockRegolith: 26,
     crewRequired: 4,
@@ -246,6 +283,7 @@ export const SECTORS: Sector[] = [
     longitude: -72,
     description: 'Layered ejecta and dusty deposits preserve evidence of dramatic impacts.',
     terrain: 'Impact deposits',
+    surfaceRelief: 'ejecta-blanket',
     unlockMetal: 34,
     unlockRegolith: 28,
     crewRequired: 5,
@@ -257,6 +295,7 @@ export const SECTORS: Sector[] = [
     longitude: 144,
     description: 'A broad impact landscape makes geology visible in its rings and fractured floor.',
     terrain: 'Basin floor',
+    surfaceRelief: 'impact-basin',
     unlockMetal: 36,
     unlockRegolith: 30,
     crewRequired: 5,
@@ -268,6 +307,7 @@ export const SECTORS: Sector[] = [
     longitude: -144,
     description: 'Concentric mountain rings frame a challenging route through steep lunar terrain.',
     terrain: 'Concentric massif',
+    surfaceRelief: 'concentric-massif',
     unlockMetal: 38,
     unlockRegolith: 32,
     crewRequired: 5,
@@ -279,6 +319,7 @@ export const SECTORS: Sector[] = [
     longitude: -72,
     description: 'A permanently shadowed crater demands careful planning for heat, light, and access.',
     terrain: 'Shadowed crater',
+    surfaceRelief: 'shadowed-crater',
     unlockMetal: 40,
     unlockRegolith: 34,
     crewRequired: 6,
@@ -301,8 +342,8 @@ export const RESOURCE_INFO: Record<
 export const BUILDINGS: BuildingDefinition[] = [
   {
     id: 'habitat',
-    name: 'Basic habitat',
-    shortName: 'Habitat',
+    name: 'Starter shelter',
+    shortName: 'Starter shelter',
     description: 'Shelter and starter life-support equipment for the crew.',
     metal: 0,
     regolith: 0,
@@ -311,28 +352,18 @@ export const BUILDINGS: BuildingDefinition[] = [
   },
   {
     id: 'living-quarters',
-    name: 'Living quarters',
-    shortName: 'Quarters',
-    description: 'Adds a sheltered crew module to this outpost; the shared colony population stays the same.',
+    name: 'Crew homes',
+    shortName: 'Crew homes',
+    description: 'Adds a safe place for crew to live at this outpost; it does not add more crew.',
     metal: 20,
     regolith: 16,
     production: {},
     consumption: {},
   },
   {
-    id: 'solar-array',
-    name: 'Solar array',
-    shortName: 'Solar',
-    description: 'Collects sunlight and supplies 12 energy each day.',
-    metal: 12,
-    regolith: 10,
-    production: { energy: 12 },
-    consumption: {},
-  },
-  {
     id: 'hydroponics',
-    name: 'Hydroponics bay',
-    shortName: 'Hydroponics',
+    name: 'Indoor farm',
+    shortName: 'Indoor farm',
     description: 'Grows 10 food each day and uses 2 water and 2 energy.',
     metal: 18,
     regolith: 18,
@@ -341,8 +372,8 @@ export const BUILDINGS: BuildingDefinition[] = [
   },
   {
     id: 'ice-extractor',
-    name: 'Ice extractor',
-    shortName: 'Ice extractor',
+    name: 'Ice drill',
+    shortName: 'Ice drill',
     description: 'Extracts 10 water daily and needs 3 energy to operate.',
     metal: 20,
     regolith: 12,
@@ -351,23 +382,13 @@ export const BUILDINGS: BuildingDefinition[] = [
   },
   {
     id: 'oxygen-recycler',
-    name: 'Oxygen recycler',
-    shortName: 'O₂ recycler',
+    name: 'Air recycler',
+    shortName: 'Air recycler',
     description: 'Recycles 10 oxygen each day and uses 2 energy.',
     metal: 14,
     regolith: 8,
     production: { oxygen: 10 },
     consumption: { energy: 2 },
-  },
-  {
-    id: 'regolith-mine',
-    name: 'Regolith & metal mine',
-    shortName: 'Surface mine',
-    description: 'Produces 4 metal and 8 regolith daily using 5 energy.',
-    metal: 16,
-    regolith: 14,
-    production: { metal: 4, regolith: 8 },
-    consumption: { energy: 5 },
   },
   {
     id: 'solar-panels',
@@ -381,8 +402,8 @@ export const BUILDINGS: BuildingDefinition[] = [
   },
   {
     id: 'nuclear-power',
-    name: 'Nuclear power',
-    shortName: 'Nuclear',
+    name: 'Nuclear power station',
+    shortName: 'Nuclear plant',
     description: 'Produces steady high-output power; reactor fuel is not modeled as a separate resource.',
     metal: 32,
     regolith: 28,
@@ -391,8 +412,8 @@ export const BUILDINGS: BuildingDefinition[] = [
   },
   {
     id: 'medical-bay',
-    name: 'Medical bay',
-    shortName: 'Medical',
+    name: 'Medical clinic',
+    shortName: 'Clinic',
     description: 'Provides an on-site clinic and crew care; health outcomes are not separately simulated.',
     metal: 18,
     regolith: 14,
@@ -401,8 +422,8 @@ export const BUILDINGS: BuildingDefinition[] = [
   },
   {
     id: 'oxygen-plant',
-    name: 'Oxygen plant',
-    shortName: 'Oxygen plant',
+    name: 'Oxygen maker',
+    shortName: 'Oxygen maker',
     description: 'Produces breathable oxygen using colony power.',
     metal: 22,
     regolith: 16,
@@ -410,20 +431,10 @@ export const BUILDINGS: BuildingDefinition[] = [
     consumption: { energy: 3 },
   },
   {
-    id: 'water-plant',
-    name: 'Water plant',
-    shortName: 'Water plant',
-    description: 'Processes lunar water and supplies the colony.',
-    metal: 24,
-    regolith: 20,
-    production: { water: 14 },
-    consumption: { energy: 4 },
-  },
-  {
     id: 'soil-farm',
     name: 'Soil farm',
     shortName: 'Soil farm',
-    description: 'Grows a smaller food harvest while using less water than a hydroponic farm.',
+    description: 'Grows less food while using less water than the water-grown farm.',
     metal: 16,
     regolith: 14,
     production: { food: 5 },
@@ -431,9 +442,9 @@ export const BUILDINGS: BuildingDefinition[] = [
   },
   {
     id: 'hydroponic-farm',
-    name: 'Hydroponic farm',
-    shortName: 'Hydroponic farm',
-    description: 'Uses more water and power to produce a larger food harvest.',
+    name: 'Water-grown farm',
+    shortName: 'Water farm',
+    description: 'Uses more water and power to grow more food.',
     metal: 24,
     regolith: 22,
     production: { food: 14 },
@@ -441,9 +452,9 @@ export const BUILDINGS: BuildingDefinition[] = [
   },
   {
     id: 'bug-protein-processor',
-    name: 'Bug protein processor',
-    shortName: 'Protein processor',
-    description: 'Consumes food as feedstock and produces a larger amount of food.',
+    name: 'Bug food maker',
+    shortName: 'Bug food maker',
+    description: 'Uses some food to make a larger amount of food.',
     metal: 22,
     regolith: 18,
     production: { food: 8 },
@@ -451,9 +462,9 @@ export const BUILDINGS: BuildingDefinition[] = [
   },
   {
     id: 'regolith-collector',
-    name: 'Regolith collector',
-    shortName: 'Regolith collector',
-    description: 'Collects lunar regolith for construction using colony power.',
+    name: 'Moon dust collector',
+    shortName: 'Moon dust',
+    description: 'Collects moon dust for building materials using colony power.',
     metal: 12,
     regolith: 10,
     production: { regolith: 10 },
@@ -461,14 +472,21 @@ export const BUILDINGS: BuildingDefinition[] = [
   },
   {
     id: 'deep-rock-mining',
-    name: 'Deep rock mining',
-    shortName: 'Deep mining',
+    name: 'Deep mine',
+    shortName: 'Deep mine',
     description: 'Extracts additional metal from deep deposits with a high power demand.',
     metal: 32,
     regolith: 26,
     production: { metal: 8, regolith: 4 },
     consumption: { energy: 8 },
   },
+];
+
+export const STARTER_FREE_BUILDING_IDS: readonly BuildingId[] = [
+  'living-quarters',
+  'solar-panels',
+  'soil-farm',
+  'ice-extractor',
 ];
 
 const DEFAULT_BUILDING_PLACEMENTS: BuildingPlacement[] = [
@@ -618,7 +636,7 @@ export function createColony(startingSector: number): ColonySave {
       regolith: 120,
     },
     buildings: { [startingSector]: ['habitat'] },
-    buildingPlacements: { [startingSector]: {} },
+    buildingPlacements: { [startingSector]: [] },
     day: 1,
     elapsedMs: 0,
     lastFieldworkDay: 0,
@@ -632,6 +650,7 @@ export function createColony(startingSector: number): ColonySave {
     paused: false,
     failed: false,
     failureReason: '',
+    starterTutorialSeen: false,
   };
 }
 
@@ -645,6 +664,13 @@ export function getBuilding(id: BuildingId): BuildingDefinition {
   const building = BUILDINGS.find((item) => item.id === id);
   if (!building) throw new Error(`Unknown building: ${id}`);
   return building;
+}
+
+export function isFirstBuildFree(colony: ColonySave, buildingId: BuildingId): boolean {
+  return (
+    STARTER_FREE_BUILDING_IDS.includes(buildingId) &&
+    !Object.values(colony.buildings).some((buildings) => buildings.includes(buildingId))
+  );
 }
 
 export function canUnlock(colony: ColonySave, sector: Sector): boolean {
@@ -676,7 +702,7 @@ export function unlockSector(colony: ColonySave, sectorId: number): ColonySave {
       regolith: colony.resources.regolith - sector.unlockRegolith,
     },
     buildings: { ...colony.buildings, [sectorId]: [] },
-    buildingPlacements: { ...colony.buildingPlacements, [sectorId]: {} },
+    buildingPlacements: { ...colony.buildingPlacements, [sectorId]: [] },
   };
 }
 
@@ -703,17 +729,14 @@ export function isValidBuildingPlacement(
   }
 
   const sectorBuildings = colony.buildings[colony.currentSector] ?? [];
-  const currentPlacements = colony.buildingPlacements?.[colony.currentSector] ?? {};
+  const currentPlacements = colony.buildingPlacements?.[colony.currentSector] ?? [];
   const hasHabitat = sectorBuildings.includes('habitat');
   const base = { x: 0.5, y: (hasHabitat ? 85 : 91) / 160 };
   if (placementDistance(placement, base) < (hasHabitat ? 32 : 25)) return false;
 
-  const occupiedByBuilding = sectorBuildings
-    .filter((id) => id !== 'habitat')
-    .some((id) => {
-      const location = currentPlacements[id];
-      return location ? placementDistance(placement, location) < 20 : false;
-    });
+  const occupiedByBuilding = currentPlacements.some(
+    (currentPlacement) => placementDistance(placement, currentPlacement) < 20,
+  );
   if (occupiedByBuilding) return false;
 
   const fieldSites = [
@@ -726,15 +749,16 @@ export function isValidBuildingPlacement(
 }
 
 export function getDefaultBuildingPlacement(colony: ColonySave): BuildingPlacement {
-  const builtCount = (colony.buildings[colony.currentSector] ?? []).filter(
-    (id) => id !== 'habitat',
-  ).length;
-  for (let offset = 0; offset < DEFAULT_BUILDING_PLACEMENTS.length; offset += 1) {
-    const candidate =
-      DEFAULT_BUILDING_PLACEMENTS[(builtCount + offset) % DEFAULT_BUILDING_PLACEMENTS.length];
+  for (const candidate of DEFAULT_BUILDING_PLACEMENTS) {
     if (isValidBuildingPlacement(colony, candidate)) return { ...candidate };
   }
-  return { ...DEFAULT_BUILDING_PLACEMENTS[builtCount % DEFAULT_BUILDING_PLACEMENTS.length] };
+  for (let y = 16; y <= 144; y += 16) {
+    for (let x = 16; x <= 232; x += 18) {
+      const candidate = { x: x / 250, y: y / 160 };
+      if (isValidBuildingPlacement(colony, candidate)) return candidate;
+    }
+  }
+  throw new Error('There is no clear map space left for another facility.');
 }
 
 export function buildStructure(
@@ -749,12 +773,12 @@ export function buildStructure(
   const definition = getBuilding(buildingId);
   if (buildingId === 'habitat') throw new Error('The basic habitat is included with the landing.');
   const placed = colony.buildings[colony.currentSector] ?? [];
-  if (placed.includes(buildingId)) {
-    throw new Error(`${definition.name} is already built in this sector.`);
-  }
+  const firstBuildFree = isFirstBuildFree(colony, buildingId);
+  const metalCost = firstBuildFree ? 0 : definition.metal;
+  const regolithCost = firstBuildFree ? 0 : definition.regolith;
   if (
-    colony.resources.metal < definition.metal ||
-    colony.resources.regolith < definition.regolith
+    colony.resources.metal < metalCost ||
+    colony.resources.regolith < regolithCost
   ) {
     throw new Error(`Not enough metal or lunar regolith to build ${definition.name}.`);
   }
@@ -767,8 +791,8 @@ export function buildStructure(
     ...colony,
     resources: {
       ...colony.resources,
-      metal: colony.resources.metal - definition.metal,
-      regolith: colony.resources.regolith - definition.regolith,
+      metal: colony.resources.metal - metalCost,
+      regolith: colony.resources.regolith - regolithCost,
     },
     buildings: {
       ...colony.buildings,
@@ -776,10 +800,10 @@ export function buildStructure(
     },
     buildingPlacements: {
       ...colony.buildingPlacements,
-      [colony.currentSector]: {
+      [colony.currentSector]: [
         ...colony.buildingPlacements[colony.currentSector],
-        [buildingId]: { ...buildingPlacement },
-      },
+        { buildingId, ...buildingPlacement },
+      ],
     },
   };
 }
@@ -1003,10 +1027,80 @@ export function advanceDay(colony: ColonySave): ColonySave {
   };
 }
 
+function removeDiscontinuedFacilities(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const rawSave = value as Record<string, unknown>;
+  const buildings = rawSave.buildings;
+  const buildingPlacements = rawSave.buildingPlacements;
+  const cleanedBuildings =
+    buildings && typeof buildings === 'object' && !Array.isArray(buildings)
+      ? Object.fromEntries(
+          Object.entries(buildings).map(([sectorId, sectorBuildings]) => [
+            sectorId,
+            Array.isArray(sectorBuildings)
+              ? sectorBuildings.filter(
+                  (buildingId) =>
+                    typeof buildingId !== 'string' ||
+                    !DISCONTINUED_BUILDING_IDS.has(buildingId),
+                )
+              : sectorBuildings,
+          ]),
+        )
+      : buildings;
+  const cleanedPlacements =
+    buildingPlacements && typeof buildingPlacements === 'object' && !Array.isArray(buildingPlacements)
+      ? Object.fromEntries(
+          Object.entries(buildingPlacements).map(([sectorId, sectorPlacements]) => {
+            if (Array.isArray(sectorPlacements)) {
+              return [
+                sectorId,
+                sectorPlacements.filter((placement) => {
+                  if (!placement || typeof placement !== 'object' || Array.isArray(placement)) {
+                    return true;
+                  }
+                  const buildingId = (placement as Record<string, unknown>).buildingId;
+                  return typeof buildingId !== 'string' || !DISCONTINUED_BUILDING_IDS.has(buildingId);
+                }),
+              ];
+            }
+            if (
+              sectorPlacements &&
+              typeof sectorPlacements === 'object' &&
+              !Array.isArray(sectorPlacements)
+            ) {
+              return [
+                sectorId,
+                Object.fromEntries(
+                  Object.entries(sectorPlacements).filter(
+                    ([buildingId]) => !DISCONTINUED_BUILDING_IDS.has(buildingId),
+                  ),
+                ),
+              ];
+            }
+            return [sectorId, sectorPlacements];
+          }),
+        )
+      : buildingPlacements;
+  return {
+    ...rawSave,
+    buildings: cleanedBuildings,
+    buildingPlacements: cleanedPlacements,
+  };
+}
+
 export function validateSave(value: unknown): ColonySave {
   if (!value || typeof value !== 'object') {
     throw new Error('Save data is not an object.');
   }
+  const rawSave = removeDiscontinuedFacilities(value) as Partial<ColonySave> & { version?: number };
+  if (
+    rawSave.version !== 1 &&
+    rawSave.version !== 2 &&
+    rawSave.version !== 3 &&
+    rawSave.version !== 4 &&
+    rawSave.version !== 5 &&
+    rawSave.version !== SAVE_VERSION
+  ) {
   const rawSave = value as Partial<ColonySave> & { version?: number };
   if (
     rawSave.version !== 1 &&
@@ -1016,6 +1110,24 @@ export function validateSave(value: unknown): ColonySave {
   ) {
     throw new Error(`Unsupported save version: ${String(rawSave.version)}.`);
   }
+  const save: Partial<ColonySave> =
+    rawSave.version === SAVE_VERSION
+      ? rawSave
+      : rawSave.version === 5
+        ? { ...rawSave, version: SAVE_VERSION }
+      : rawSave.version === 4
+        ? { ...rawSave, version: SAVE_VERSION, starterTutorialSeen: false }
+        : {
+            ...rawSave,
+            version: SAVE_VERSION,
+            lastFieldworkDay: rawSave.version === 1 ? 0 : rawSave.lastFieldworkDay,
+            buildingPlacements: migrateBuildingPlacements(
+              rawSave.buildings,
+              rawSave.buildingPlacements,
+              rawSave.version === 3,
+            ),
+            starterTutorialSeen: false,
+          };
   const sourceVersion = rawSave.version;
   const save: Partial<ColonySave> = sourceVersion === SAVE_VERSION
     ? rawSave
@@ -1064,7 +1176,8 @@ export function validateSave(value: unknown): ColonySave {
     typeof save.lastFieldworkDay !== 'number' ||
     typeof save.paused !== 'boolean' ||
     typeof save.failed !== 'boolean' ||
-    typeof save.failureReason !== 'string'
+    typeof save.failureReason !== 'string' ||
+    typeof save.starterTutorialSeen !== 'boolean'
   ) {
     throw new Error('Save data is incomplete or invalid.');
   }
@@ -1185,19 +1298,17 @@ export function validateSave(value: unknown): ColonySave {
     const sectorBuildings = save.buildings[Number(sectorId)] ?? [];
     if (
       !sectorIds.has(Number(sectorId)) ||
-      !placements ||
-      typeof placements !== 'object' ||
-      Array.isArray(placements)
+      !Array.isArray(placements)
     ) {
       throw new Error('Save data contains invalid building placements.');
     }
-    for (const [buildingId, placement] of Object.entries(placements)) {
+    for (const placement of placements) {
       if (
-        !BUILDINGS.some((building) => building.id === buildingId) ||
-        buildingId === 'habitat' ||
-        !sectorBuildings.includes(buildingId as BuildingId) ||
         !placement ||
         typeof placement !== 'object' ||
+        !BUILDINGS.some((building) => building.id === placement.buildingId) ||
+        placement.buildingId === 'habitat' ||
+        !sectorBuildings.includes(placement.buildingId) ||
         !Number.isFinite(placement.x) ||
         !Number.isFinite(placement.y) ||
         placement.x < 0 ||
@@ -1208,10 +1319,25 @@ export function validateSave(value: unknown): ColonySave {
         throw new Error('Save data contains invalid building placements.');
       }
     }
+    const remainingBuildingCounts = new Map<BuildingId, number>();
+    for (const buildingId of sectorBuildings) {
+      if (buildingId !== 'habitat') {
+        remainingBuildingCounts.set(
+          buildingId,
+          (remainingBuildingCounts.get(buildingId) ?? 0) + 1,
+        );
+      }
+    }
+    for (const { buildingId } of placements) {
+      remainingBuildingCounts.set(buildingId, (remainingBuildingCounts.get(buildingId) ?? 0) - 1);
+    }
+    if ([...remainingBuildingCounts.values()].some((count) => count !== 0)) {
+      throw new Error('Save data is missing a facility location.');
+    }
   }
   for (const [sectorId, buildings] of Object.entries(save.buildings)) {
-    const placements = save.buildingPlacements[Number(sectorId)] ?? {};
-    if (buildings.some((id) => id !== 'habitat' && !placements[id])) {
+    const placements = save.buildingPlacements[Number(sectorId)] ?? [];
+    if (placements.length !== buildings.filter((id) => id !== 'habitat').length) {
       throw new Error('Save data is missing a facility location.');
     }
   }
@@ -1228,18 +1354,73 @@ export function validateSave(value: unknown): ColonySave {
 
 function migrateBuildingPlacements(
   buildings: ColonySave['buildings'] | undefined,
+  previousPlacements?: unknown,
+  preserveExisting = false,
 ): ColonySave['buildingPlacements'] {
   if (!buildings || typeof buildings !== 'object' || Array.isArray(buildings)) return {};
+
+  let oldPlacementsBySector: Record<string, unknown> = {};
+  if (preserveExisting) {
+    if (
+      !previousPlacements ||
+      typeof previousPlacements !== 'object' ||
+      Array.isArray(previousPlacements)
+    ) {
+      throw new Error('Save data contains invalid building placements.');
+    }
+    oldPlacementsBySector = previousPlacements as Record<string, unknown>;
+  }
 
   const placements: ColonySave['buildingPlacements'] = {};
   for (const [sectorId, buildingIds] of Object.entries(buildings)) {
     if (!Array.isArray(buildingIds)) continue;
-    const sectorPlacements: Partial<Record<BuildingId, BuildingPlacement>> = {};
+    const facilityIds = buildingIds.filter((buildingId) => buildingId !== 'habitat');
+    const oldSectorPlacements = oldPlacementsBySector[sectorId];
+    if (
+      preserveExisting &&
+      oldSectorPlacements !== undefined &&
+      (!oldSectorPlacements || typeof oldSectorPlacements !== 'object' || Array.isArray(oldSectorPlacements))
+    ) {
+      throw new Error('Save data contains invalid building placements.');
+    }
+    if (preserveExisting && new Set(facilityIds).size !== facilityIds.length) {
+      throw new Error('Save data contains invalid buildings.');
+    }
+    const oldPlacementRecord =
+      oldSectorPlacements && typeof oldSectorPlacements === 'object'
+        ? (oldSectorPlacements as Record<string, unknown>)
+        : {};
+    if (
+      preserveExisting &&
+      Object.keys(oldPlacementRecord).some(
+        (buildingId) => !facilityIds.some((placedId) => placedId === buildingId),
+      )
+    ) {
+      throw new Error('Save data contains invalid building placements.');
+    }
+
+    const sectorPlacements: PlacedBuilding[] = [];
     let facilityIndex = 0;
     for (const buildingId of buildingIds) {
       if (buildingId === 'habitat') continue;
-      const location = DEFAULT_BUILDING_PLACEMENTS[facilityIndex % DEFAULT_BUILDING_PLACEMENTS.length];
-      sectorPlacements[buildingId] = { ...location };
+      const oldPlacement = oldPlacementRecord[buildingId];
+      if (preserveExisting && oldPlacement === undefined) {
+        throw new Error('Save data is missing a facility location.');
+      }
+      let location: BuildingPlacement;
+      if (oldPlacement === undefined) {
+        location = DEFAULT_BUILDING_PLACEMENTS[facilityIndex % DEFAULT_BUILDING_PLACEMENTS.length];
+      } else {
+        if (!oldPlacement || typeof oldPlacement !== 'object' || Array.isArray(oldPlacement)) {
+          throw new Error('Save data contains invalid building placements.');
+        }
+        const oldCoordinates = oldPlacement as Record<string, unknown>;
+        if (typeof oldCoordinates.x !== 'number' || typeof oldCoordinates.y !== 'number') {
+          throw new Error('Save data contains invalid building placements.');
+        }
+        location = { x: oldCoordinates.x, y: oldCoordinates.y };
+      }
+      sectorPlacements.push({ buildingId, ...location });
       facilityIndex += 1;
     }
     placements[Number(sectorId)] = sectorPlacements;

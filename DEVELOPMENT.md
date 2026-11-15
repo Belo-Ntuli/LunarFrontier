@@ -27,11 +27,12 @@ The test suite covers colony initialization, facility construction and placement
 
 - `src/game.ts` — sector data, economy values, colony rules, hazard scheduling and repair, and local save validation
 - `src/moon-scene.ts` — Three.js lunar globe, textured terrain regions, rotation, and pointer selection
-- `src/ui.ts` — atlas, interactive sector map and fieldwork, HUD, hazard board, construction, timer, and save/load behavior
+- `src/ui.ts` — atlas, pixelated sector map and wandering crew sprites, fieldwork and HUD, interactive sector map and fieldwork, hazard board, construction, timer, and save/load behavior
 - `src/style.css` — responsive visual design and reduced-motion support
 - `src/game.test.ts` — core game-rule tests
 - `GAME_SPEC.md` — gameplay behavior, initial balancing values, and acceptance criteria
 
 ## Save data
 
+The save key is `lunar-frontier-save`; its schema version is `6`. Version-1 through version-5 colonies are migrated automatically, preserving progress and existing facility locations while removing discontinued facility types. Use the in-game **Start a new colony** flow to replace an existing mission. Invalid saves are reported instead of being silently overwritten.
 The save key is `lunar-frontier-save`; its schema version is `4`. Version-1, version-2, and version-3 colonies are migrated automatically, preserving progress and assigning existing facilities default map positions. Active hazards, the seeded random state, and the next hazard interval are saved. Solar-flare/DONKI behavior is a placeholder; the game does not currently make NASA API requests. Use the in-game **Start a new colony** flow to replace an existing mission. Invalid saves are reported instead of being silently overwritten.
