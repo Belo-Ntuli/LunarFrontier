@@ -43,6 +43,11 @@ const MAX_MAP_ZOOM = 2.4;
 const MAP_ZOOM_STEP = 0.15;
 let mapZoom = BASE_MAP_ZOOM;
 let crewAnimationFrame: number | null = null;
+let crewWalkers: CrewWalker[] = [];
+let crewWalkersSectorId: number | null = null;
+let constructionTask: ConstructionTask | null = null;
+const CONSTRUCTION_WORK_MS = 3500;
+const CREW_WALK_SPEED = 14;
 
 interface CrewStop {
   id: string;
@@ -69,6 +74,19 @@ interface CrewWalker {
   trim: string;
   visor: string;
   phase: number;
+  working: boolean;
+}
+
+interface ConstructionTask {
+  buildingId: BuildingId;
+  placement: BuildingPlacement;
+  workerIndex: number;
+  targetX: number;
+  targetY: number;
+  travelDurationMs: number;
+  workElapsedMs: number;
+  phase: 'travelling' | 'building';
+  pathStarted: boolean;
 }
 
 const CREW_PALETTE = [
@@ -310,6 +328,7 @@ function buildingCardMarkup(buildingId: BuildingId): string {
   const placed = colony?.buildings[colony.currentSector] ?? [];
   const built = placed.includes(building.id);
   const isPlacing = pendingBuildingId === building.id;
+  const isConstructing = constructionTask?.buildingId === building.id;
   const affordable = colony
     ? colony.resources.metal >= building.metal &&
       colony.resources.regolith >= building.regolith
@@ -333,7 +352,7 @@ function buildingCardMarkup(buildingId: BuildingId): string {
       <div class="building-yield">${yieldLabel}${Object.keys(building.consumption).length ? ` · uses ${Object.entries(building.consumption).map(([key, amount]) => `${amount} ${RESOURCE_INFO[key as ResourceKey].label}/day`).join(', ')}` : ''}</div>
       <div class="building-cost">${costs}</div>
     </div>
-    <button class="build-button ${built ? 'is-built' : affordable ? '' : 'is-unaffordable'} ${isPlacing ? 'is-placing' : ''}" data-action="${isPlacing ? 'cancel-placement' : 'build'}" data-building="${building.id}" ${built || !affordable ? 'disabled' : ''} aria-label="${built ? 'Already built' : isPlacing ? `Cancel placing ${building.name}` : `Choose a location for ${building.name}`}">${built ? 'BUILT' : isPlacing ? 'CANCEL' : affordable ? 'PLACE' : 'NEED'}</button>
+    <button class="build-button ${built ? 'is-built' : affordable ? '' : 'is-unaffordable'} ${isPlacing || isConstructing ? 'is-placing' : ''}" data-action="${isPlacing ? 'cancel-placement' : 'build'}" data-building="${building.id}" ${built || !affordable || (constructionTask && !isPlacing) ? 'disabled' : ''} aria-label="${built ? 'Already built' : isConstructing ? `Building ${building.name}` : constructionTask ? 'Wait for construction to finish' : isPlacing ? `Cancel placing ${building.name}` : `Choose a location for ${building.name}`}">${built ? 'BUILT' : isConstructing ? 'BUILDING' : constructionTask ? 'WAIT' : isPlacing ? 'CANCEL' : affordable ? 'PLACE' : 'NEED'}</button>
   </article>`;
 }
 
@@ -474,6 +493,9 @@ function sectorSurfaceMarkup(sector: Sector): string {
   const pendingBuilding = pendingBuildingId
     ? BUILDINGS.find((building) => building.id === pendingBuildingId)
     : undefined;
+  const constructionBuilding = constructionTask
+    ? BUILDINGS.find((building) => building.id === constructionTask!.buildingId)
+    : undefined;
   const cursorIsValid =
     colony && pendingBuildingId && placementCursor
       ? isValidBuildingPlacement(colony, placementCursor)
@@ -562,6 +584,12 @@ function sectorSurfaceMarkup(sector: Sector): string {
         <button class="map-zoom-button" type="button" data-action="map-zoom-in" aria-label="Zoom in on base" ${mapZoom >= MAX_MAP_ZOOM ? 'disabled' : ''}>+</button>
         <button class="map-zoom-reset" type="button" data-action="map-zoom-reset" ${mapZoom === BASE_MAP_ZOOM ? 'disabled' : ''}>BASE</button>
       </div>
+      ${constructionTask && constructionBuilding ? `<div class="construction-site-marker" style="left:${constructionTask.placement.x * 100}%;top:${constructionTask.placement.y * 100}%" aria-hidden="true"></div>
+        <div class="construction-status" role="status" aria-live="polite">
+          <strong class="construction-label">${colony?.paused ? 'SIMULATION PAUSED' : constructionTask.phase === 'travelling' ? 'CREW EN ROUTE' : `BUILDING · ${Math.max(1, Math.ceil((CONSTRUCTION_WORK_MS - constructionTask.workElapsedMs) / 1000))}s`}</strong>
+          <span>${esc(constructionBuilding.name)} · 3.5 seconds of work after arrival</span>
+          <div class="construction-progress"><i style="width:${constructionTask.phase === 'building' ? Math.min(100, (constructionTask.workElapsedMs / CONSTRUCTION_WORK_MS) * 100) : 0}%"></i></div>
+        </div>` : ''}
     </div>
     <div class="surface-bottom"><span><i class="live-dot"></i> SURFACE LINK STABLE</span><span>FIELD TEAM · ${colony?.people} CREW</span><span>OPERATIONS ${fieldworkComplete ? 'COMPLETE' : colony?.paused ? 'PAUSED' : 'READY'}</span></div>
   </div>`;
@@ -961,45 +989,83 @@ function renderWanderingCrew(): void {
         : otherStops;
     return destinationPool[Math.floor(Math.random() * destinationPool.length)] ?? stops[0];
   };
-  const walkers: CrewWalker[] = Array.from({ length: colony.people }, (_, index) => {
-    const stop = buildings[index % buildings.length] ?? stops[index % stops.length];
-    const point = stageAt(stop, (index / Math.max(1, colony!.people)) * Math.PI * 2);
-    const appearance = CREW_PALETTE[index % CREW_PALETTE.length];
-    return {
-      ...point,
-      startX: point.x,
-      startY: point.y,
-      targetX: point.x,
-      targetY: point.y,
-      controlX: point.x,
-      controlY: point.y,
-      progress: 1,
-      duration: 1,
-      idleUntil: performance.now() + index * 260,
-      currentStop: stop.id,
-      targetStop: stop.id,
-      ...appearance,
-      phase: index % 2,
-    };
-  });
+  const reuseWalkers =
+    crewWalkersSectorId === colony.currentSector && crewWalkers.length === colony.people;
+  const walkers = reuseWalkers
+    ? crewWalkers
+    : Array.from({ length: colony.people }, (_, index) => {
+        const stop = buildings[index % buildings.length] ?? stops[index % stops.length];
+        const point = stageAt(stop, (index / Math.max(1, colony!.people)) * Math.PI * 2);
+        const appearance = CREW_PALETTE[index % CREW_PALETTE.length];
+        return {
+          ...point,
+          startX: point.x,
+          startY: point.y,
+          targetX: point.x,
+          targetY: point.y,
+          controlX: point.x,
+          controlY: point.y,
+          progress: 1,
+          duration: 1,
+          idleUntil: performance.now() + index * 260,
+          currentStop: stop.id,
+          targetStop: stop.id,
+          ...appearance,
+          phase: index % 2,
+          working: false,
+        };
+      });
+  if (!reuseWalkers) {
+    crewWalkers = walkers;
+    crewWalkersSectorId = colony.currentSector;
+  }
 
-  const beginWalk = (walker: CrewWalker, now: number): void => {
-    const destination = pickStop(walker.currentStop);
-    const point = stageAt(destination, Math.random() * Math.PI * 2);
+  const setWalkPath = (
+    walker: CrewWalker,
+    point: { x: number; y: number },
+    destinationId: string,
+    now: number,
+    duration?: number,
+  ): void => {
     walker.startX = walker.x;
     walker.startY = walker.y;
     walker.targetX = point.x;
     walker.targetY = point.y;
-    walker.targetStop = destination.id;
+    walker.targetStop = destinationId;
     const distance = Math.hypot(point.x - walker.x, point.y - walker.y);
     const bend = (Math.random() - 0.5) * 18;
     const perpendicularX = distance ? -(point.y - walker.y) / distance : 0;
     const perpendicularY = distance ? (point.x - walker.x) / distance : 0;
     walker.controlX = (walker.x + point.x) / 2 + perpendicularX * bend;
     walker.controlY = (walker.y + point.y) / 2 + perpendicularY * bend;
-    walker.duration = Math.max(1.2, distance / (12 + Math.random() * 5));
+    walker.duration = duration ?? Math.max(1.2, distance / (12 + Math.random() * 5));
     walker.progress = 0;
     walker.idleUntil = now;
+  };
+
+  const beginWalk = (walker: CrewWalker, now: number): void => {
+    const destination = pickStop(walker.currentStop);
+    const point = stageAt(destination, Math.random() * Math.PI * 2);
+    setWalkPath(walker, point, destination.id, now);
+  };
+
+  const advanceWalk = (walker: CrewWalker, deltaSeconds: number, now: number): void => {
+    if (walker.progress >= 1) return;
+    walker.progress = Math.min(1, walker.progress + deltaSeconds / walker.duration);
+    const inverse = 1 - walker.progress;
+    walker.x =
+      inverse * inverse * walker.startX +
+      2 * inverse * walker.progress * walker.controlX +
+      walker.progress * walker.progress * walker.targetX;
+    walker.y =
+      inverse * inverse * walker.startY +
+      2 * inverse * walker.progress * walker.controlY +
+      walker.progress * walker.progress * walker.targetY;
+    if (walker.progress === 1) {
+      walker.x = walker.targetX;
+      walker.y = walker.targetY;
+      walker.idleUntil = now + 650 + Math.random() * 1300;
+    }
   };
 
   const drawWalker = (walker: CrewWalker, now: number): void => {
@@ -1030,6 +1096,10 @@ function renderWanderingCrew(): void {
     block('#36474c', 3, -3, 1, 3);
     block(walker.trim, -1, 2 + step, 2, 1);
     block(walker.trim, 1, 2 + (1 - step), 2, 1);
+    if (walker.working) {
+      block(walker.trim, 3, -2, 2, 1);
+      block('#ffe09a', 5, -3, 1, 1);
+    }
   };
 
   const pixelScale = 2;
@@ -1052,6 +1122,21 @@ function renderWanderingCrew(): void {
     );
     for (const walker of walkers) drawWalker(walker, now);
   };
+  const updateConstructionStatus = (task: ConstructionTask): void => {
+    const label = document.querySelector<HTMLElement>('.construction-label');
+    const progressBar = document.querySelector<HTMLElement>('.construction-progress i');
+    if (!label || !progressBar) return;
+
+    label.textContent = colony?.paused
+      ? 'SIMULATION PAUSED'
+      : task.phase === 'travelling'
+        ? 'CREW EN ROUTE'
+        : `BUILDING · ${Math.max(1, Math.ceil((CONSTRUCTION_WORK_MS - task.workElapsedMs) / 1000))}s`;
+    const progress = task.phase === 'travelling'
+      ? (walkers[task.workerIndex]?.progress ?? 0) * 35
+      : 35 + (task.workElapsedMs / CONSTRUCTION_WORK_MS) * 65;
+    progressBar.style.width = `${Math.min(100, progress)}%`;
+  };
   const animate = (now: number): void => {
     if (!canvas.isConnected) return;
     if (document.visibilityState === 'hidden') {
@@ -1059,38 +1144,79 @@ function renderWanderingCrew(): void {
       return;
     }
 
-    const canMove = !reducedMotion && colony && !colony.paused && !colony.failed;
-    if (canMove) {
-      const deltaSeconds = Math.min(50, Math.max(0, now - previousFrameTime)) / 1000;
-      for (const walker of walkers) {
-        if (walker.progress >= 1 && now >= walker.idleUntil) {
-          walker.currentStop = walker.targetStop;
-          beginWalk(walker, now);
-        }
-        if (walker.progress < 1) {
-          walker.progress = Math.min(1, walker.progress + deltaSeconds / walker.duration);
-          const inverse = 1 - walker.progress;
-          walker.x =
-            inverse * inverse * walker.startX +
-            2 * inverse * walker.progress * walker.controlX +
-            walker.progress * walker.progress * walker.targetX;
-          walker.y =
-            inverse * inverse * walker.startY +
-            2 * inverse * walker.progress * walker.controlY +
-            walker.progress * walker.progress * walker.targetY;
-          if (walker.progress === 1) {
-            walker.x = walker.targetX;
-            walker.y = walker.targetY;
-            walker.idleUntil = now + 650 + Math.random() * 1300;
+    const simulationActive = Boolean(colony && !colony.paused && !colony.failed);
+    const deltaMs = Math.min(50, Math.max(0, now - previousFrameTime));
+    if (simulationActive) {
+      const task = constructionTask;
+      const worker = task ? walkers[task.workerIndex] : undefined;
+      if (task && worker && reducedMotion) {
+        worker.x = task.targetX;
+        worker.y = task.targetY;
+        worker.startX = task.targetX;
+        worker.startY = task.targetY;
+        worker.targetX = task.targetX;
+        worker.targetY = task.targetY;
+        worker.progress = 1;
+        worker.working = true;
+        worker.currentStop = 'construction-site';
+        worker.targetStop = 'construction-site';
+        task.phase = 'building';
+        task.pathStarted = true;
+      }
+
+      for (let index = 0; index < walkers.length; index += 1) {
+        const walker = walkers[index];
+        if (task && index === task.workerIndex) {
+          if (task.phase === 'travelling') {
+            if (!task.pathStarted) {
+              setWalkPath(
+                walker,
+                { x: task.targetX, y: task.targetY },
+                'construction-site',
+                now,
+                Math.max(0.1, task.travelDurationMs / 1000),
+              );
+              task.pathStarted = true;
+            }
+            advanceWalk(walker, deltaMs / 1000, now);
+            if (walker.progress === 1) {
+              walker.currentStop = 'construction-site';
+              walker.working = true;
+              task.phase = 'building';
+              task.workElapsedMs = 0;
+            }
+          } else {
+            walker.working = true;
+            task.workElapsedMs += deltaMs;
           }
+        } else {
+          walker.working = false;
+          if (walker.progress >= 1 && now >= walker.idleUntil) {
+            walker.currentStop = walker.targetStop;
+            beginWalk(walker, now);
+          }
+          advanceWalk(walker, deltaMs / 1000, now);
         }
       }
+      if (constructionTask) updateConstructionStatus(constructionTask);
     }
     previousFrameTime = now;
 
     drawFrame(now);
-    if (canMove) crewAnimationFrame = window.requestAnimationFrame(animate);
-    else crewAnimationFrame = null;
+    if (
+      simulationActive &&
+      ((!reducedMotion && !colony?.failed) || constructionTask !== null)
+    ) {
+      crewAnimationFrame = window.requestAnimationFrame(animate);
+    } else {
+      crewAnimationFrame = null;
+    }
+    if (
+      constructionTask?.phase === 'building' &&
+      constructionTask.workElapsedMs >= CONSTRUCTION_WORK_MS
+    ) {
+      finishConstruction();
+    }
   };
 
   drawFrame(performance.now());
@@ -1109,7 +1235,7 @@ function sectorScreenMarkup(): string {
     : 'This region is known for exposed rock and impact-shaped terrain. Prospecting can recover useful materials, while water must come from colony stores or a new expedition.';
   return appShell(`<main class="sector-layout">
     <div class="sector-toolbar">
-      <button class="back-button" data-action="back-to-globe" aria-label="Back to sector selection"><span aria-hidden="true">←</span> SECTOR SELECT</button>
+      <button class="back-button" data-action="back-to-globe" aria-label="Back to sector selection" ${constructionTask ? 'disabled title="Wait for construction to finish before leaving this sector."' : ''}><span aria-hidden="true">←</span> SECTOR SELECT</button>
       <div class="sector-toolbar-title"><span class="eyebrow">SECTOR ${String(sector.id + 1).padStart(2, '0')} / 15</span><strong>${esc(sector.name)}</strong></div>
       <span class="surface-chip"><i class="live-dot"></i> OUTPOST ONLINE</span>
     </div>
@@ -1118,7 +1244,7 @@ function sectorScreenMarkup(): string {
       <section class="sector-map-column">
         <div class="map-heading"><div><span class="eyebrow">SURFACE OPERATIONS · SECTOR ${String(sector.id + 1).padStart(2, '0')}</span><h1>${esc(sector.name)}</h1></div><span class="map-coordinate">LOCAL TERRAIN MAP</span></div>
         ${sectorSurfaceMarkup(sector)}
-        <div class="map-instructions"><span>${pendingBuilding ? `CHOOSE A CLEAR SPOT FOR ${esc(pendingBuilding.name.toUpperCase())}` : 'SELECT A MARKER TO DEPLOY THE CREW'}</span><span>${pendingBuilding ? 'ARROWS · ENTER TO PLACE · ESC TO CANCEL' : 'ONE FIELD OPERATION PER LUNAR DAY'}</span></div>
+        <div class="map-instructions"><span>${constructionTask ? 'CREW BUILDING AT THE SELECTED SITE' : pendingBuilding ? `CHOOSE A CLEAR SPOT FOR ${esc(pendingBuilding.name.toUpperCase())}` : 'SELECT A MARKER TO DEPLOY THE CREW'}</span><span>${constructionTask ? 'TRAVEL TIME DEPENDS ON DISTANCE' : pendingBuilding ? 'ARROWS · ENTER TO PLACE · ESC TO CANCEL' : 'ONE FIELD OPERATION PER LUNAR DAY'}</span></div>
         <div class="sector-map-footer">
           <section class="field-guide-compact"><span class="eyebrow">FIELD GUIDE · ${esc(sector.terrain.toUpperCase())}</span><p>${esc(terrainLesson)}</p></section>
           <section class="day-flow-panel panel">${dailyFlowMarkup()}</section>
@@ -1126,7 +1252,7 @@ function sectorScreenMarkup(): string {
       </section>
       <aside class="management-panel panel">
         <div class="management-heading"><div><span class="eyebrow">COLONY DEVELOPMENT</span><h1>Build facilities</h1></div><span class="system-count">${(colony.buildings[sector.id] ?? []).filter((id) => id !== 'habitat').length} / ${BUILDINGS.length - 1}</span></div>
-        <p class="management-copy">Choose a facility, then select an open spot on the map. Costs are paid once; production and power use apply every lunar day across the colony.</p>
+        <p class="management-copy">${constructionTask ? 'A crew member is traveling to and building the selected facility. It will appear when construction is complete.' : 'Choose a facility, then select an open spot on the map. Costs are paid once; production and power use apply every lunar day across the colony.'}</p>
         <div class="habitat-status ${hasHabitat ? '' : 'habitat-unavailable'}"><span class="habitat-icon">⌂</span><span><strong>${hasHabitat ? 'Habitat & living quarters online' : 'Expedition site · no habitat'}</strong><small>${hasHabitat ? 'Shelter and crew quarters shown on the surface map' : 'Build living quarters to add shelter at this outpost'}</small></span><span class="status-pill ${hasHabitat ? 'status-open' : 'status-locked'}">${hasHabitat ? 'ONLINE' : 'SITE'}</span></div>
         <div class="building-list">${BUILDINGS.filter((building) => building.id !== 'habitat').map((building) => buildingCardMarkup(building.id)).join('')}</div>
         <div class="field-note"><span>ⓘ</span><p>Only one of each facility can be built per sector. Review daily energy use before construction.</p></div>
@@ -1135,7 +1261,7 @@ function sectorScreenMarkup(): string {
     <div class="colony-status-strip">
       <span><i class="live-dot"></i> MISSION STATUS <strong>${colony.failed ? 'FAILED' : colony.paused ? 'PAUSED' : 'OPERATIONAL'}</strong></span>
       <span>COLONY DAYS <strong>${Math.max(0, colony.day - 1)} SURVIVED</strong></span>
-      <button class="text-button" data-action="back-to-globe">Back to sector select <span>↗</span></button>
+      <button class="text-button" data-action="back-to-globe" ${constructionTask ? 'disabled title="Wait for construction to finish before leaving this sector."' : ''}>Back to sector select <span>↗</span></button>
     </div>
   </main>`);
 }
@@ -1201,6 +1327,9 @@ function beginColony(sectorId: number): void {
     if (!confirmed) return;
   }
   colony = createColony(sectorId);
+  constructionTask = null;
+  crewWalkers = [];
+  crewWalkersSectorId = null;
   screen = 'sector';
   inspectedSectorId = sectorId;
   saveMessage = null;
@@ -1270,15 +1399,60 @@ function cancelPlacement(): void {
   render();
 }
 
+function finishConstruction(): void {
+  if (!colony || !constructionTask) return;
+  const task = constructionTask;
+  constructionTask = null;
+  const worker = crewWalkers[task.workerIndex];
+  if (worker) {
+    worker.working = false;
+    worker.currentStop = 'construction-site';
+    worker.targetStop = 'construction-site';
+    worker.idleUntil = performance.now() + 650;
+  }
+  try {
+    updateColony(buildStructure(colony, task.buildingId, task.placement));
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Could not finish construction.');
+  }
+}
+
 function completePlacement(placement: BuildingPlacement): void {
   if (!colony || !pendingBuildingId) return;
   updatePlacementCursor(placement);
   if (!placementCursor) return;
+  const buildingId = pendingBuildingId;
+  const selectedPlacement = { ...placementCursor };
   try {
-    const next = buildStructure(colony, pendingBuildingId, placementCursor);
+    buildStructure(colony, buildingId, selectedPlacement);
+    const targetX = selectedPlacement.x * 250;
+    const targetY = selectedPlacement.y * 160;
+    const workerIndex = crewWalkers.length
+      ? crewWalkers.reduce(
+          (closestIndex, walker, index, walkers) =>
+            Math.hypot(walker.x - targetX, walker.y - targetY) <
+            Math.hypot(walkers[closestIndex].x - targetX, walkers[closestIndex].y - targetY)
+              ? index
+              : closestIndex,
+          0,
+        )
+      : 0;
+    const worker = crewWalkers[workerIndex];
+    const distance = Math.hypot((worker?.x ?? 125) - targetX, (worker?.y ?? 85) - targetY);
+    constructionTask = {
+      buildingId,
+      placement: selectedPlacement,
+      workerIndex,
+      targetX,
+      targetY,
+      travelDurationMs: (distance / CREW_WALK_SPEED) * 1000,
+      workElapsedMs: 0,
+      phase: 'travelling',
+      pathStarted: false,
+    };
     pendingBuildingId = null;
     placementCursor = null;
-    updateColony(next);
+    render();
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Could not place that facility.');
   }
@@ -1296,7 +1470,7 @@ function handleAction(button: HTMLElement): void {
       beginColony(sectorId);
       break;
     case 'enter-sector':
-      if (colony?.unlockedSectors.includes(sectorId)) {
+      if (!constructionTask && colony?.unlockedSectors.includes(sectorId)) {
         pendingBuildingId = null;
         placementCursor = null;
         colony = { ...colony, currentSector: sectorId };
@@ -1330,6 +1504,7 @@ function handleAction(button: HTMLElement): void {
       break;
     case 'back-to-globe':
     case 'home':
+      if (constructionTask) break;
       pendingBuildingId = null;
       placementCursor = null;
       screen = 'atlas';
@@ -1337,10 +1512,13 @@ function handleAction(button: HTMLElement): void {
       render();
       break;
     case 'new-colony':
+      if (constructionTask) break;
       pendingBuildingId = null;
       placementCursor = null;
       screen = 'atlas';
       colony = null;
+      crewWalkers = [];
+      crewWalkersSectorId = null;
       inspectedSectorId = 0;
       render();
       break;
@@ -1384,6 +1562,11 @@ function handleAction(button: HTMLElement): void {
 }
 
 function render(): void {
+  if (constructionTask && (!colony || colony.failed)) {
+    const worker = crewWalkers[constructionTask.workerIndex];
+    if (worker) worker.working = false;
+    constructionTask = null;
+  }
   if (crewAnimationFrame !== null) {
     window.cancelAnimationFrame(crewAnimationFrame);
     crewAnimationFrame = null;

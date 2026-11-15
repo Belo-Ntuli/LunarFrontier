@@ -117,6 +117,7 @@ Names are reproduced as supplied. Do not merge similarly named areas (for exampl
 - Show one distinct pixel-art crew character for every person in the colony. Characters wander between built structures and nearby field sites in the active sector; their movement stops while the simulation is paused or the mission has ended, and respects reduced-motion preferences.
 - The surface map shows constructed facilities and interactive fieldwork locations. Players can perform one field operation each lunar day from their current sector.
 - Facility construction starts a placement mode; players choose an open position on the surface map before costs are paid. Existing structures, the habitat/expedition site, and fieldwork locations cannot be overlapped. Arrow keys move the placement preview, Enter places it, and Escape cancels.
+- After placement confirmation, the nearest crew member walks to the chosen site and visibly constructs the facility. Distance adds travel time; the crew must work at the site for at least 3.5 seconds before the building appears and its costs are paid. Pausing stops construction. With reduced motion enabled, the worker remains still and construction completes after the 3.5-second work period. Reloading before completion cancels this uncommitted placement without spending resources.
 - Facility locations persist in the colony save and remain attached to their sector when players zoom or reload.
 - A facility type can be built once per sector. Facilities do not require a separate habitat to be present in that sector.
 - Facility production and consumption are colony-wide, and materials are shared between unlocked sectors.
@@ -124,7 +125,7 @@ Names are reproduced as supplied. Do not merge similarly named areas (for exampl
 
 ### 6.1 Facilities
 
-Construction costs are spent immediately. Production and operating consumption apply on each day transition. Facilities are unique per sector.
+Construction costs are spent once when the crew finishes construction; an in-progress placement does not spend resources. Production and operating consumption apply on each day transition. Facilities are unique per sector.
 
 | Facility | Metal | Lunar regolith | Daily output | Daily operating use |
 |---|---:|---:|---|---|
@@ -273,5 +274,6 @@ The initial implementation is ready for review when all of the following are tru
 19. The starting habitat and living quarters, along with each constructed facility, are visibly represented on the 2D sector surface. Building living quarters costs 20 Metal and 16 Lunar regolith and does not increase population.
 20. Players can choose a clear map location for each new facility; blocked locations are rejected, and chosen positions persist after reloading.
 21. The active sector map shows one distinct pixel-art character per crew member; characters wander among buildings and nearby sites, stop when paused or the mission ends, and remain still for reduced-motion preferences.
+22. After placement confirmation, a crew member walks to the marked site and works visibly for at least 3.5 seconds before the facility appears and costs are charged; longer travel distances add time, and pausing suspends the work.
 
 The economy, day length, and exploration costs are implemented as the initial values in this specification and should be adjusted only with corresponding UI, tests, and documentation updates.
